@@ -437,8 +437,8 @@ El área táctil es siempre ≥ 48 aunque el icono mida 20.
 | Play | `play_arrow_rounded` | — |
 | Pausa | `pause_rounded` | Cambio play ↔ pausa con fundido (§18) |
 | Siguiente / anterior | `skip_next_rounded` / `skip_previous_rounded` | Deshabilitado al 38 % si no hay canción |
-| Aleatorio | `shuffle_rounded` → activo `shuffle_on_rounded` | Activo: `primary` **y** icono `_on` (hoy solo cambia el color, I3) |
-| Repetir | `repeat_rounded` → `repeat_on_rounded` → `repeat_one_on_rounded` | Desactivado: `iconSecondary`; todo / una: `primary` + variante `_on` |
+| Aleatorio | `shuffle_rounded` | Activo: `primary` **sobre un círculo `primaryContainer` de 40** (Fase 1.6B; sustituye al icono `_on`, que Material dibuja como un cuadrado relleno demasiado pesado) |
+| Repetir | `repeat_rounded` → `repeat_one_rounded` | Desactivado: `iconSecondary`; todas / una: `primary` sobre círculo `primaryContainer`; "una" usa además su icono. Semántica: interruptor con valor desactivado / todas / una |
 | Favorito | `favorite_border_rounded` → `favorite_rounded` | Marcado: relleno + `primary` |
 | Cola | `queue_music_rounded` | — |
 | Más | `more_horiz_rounded` (filas y reproductor), `more_vert_rounded` solo en la barra superior | — |
@@ -801,7 +801,7 @@ componente (no cambian su color de fondo).
 | **Default** | Tokens del componente | — |
 | **Pressed** | Capa de `textPrimary` al 10 %; sobre fondos naranjas, `primaryPressed`. Las tarjetas y el botón primario además escalan a 0.98 | Respuesta táctil inmediata (≤ 100 ms) |
 | **Selected** | Fondo `primaryContainer` o anillo `primary` | Marca `check_circle_rounded` |
-| **Active** (toggle encendido, pestaña actual, canción que suena) | Icono o texto en `primary` | Variante de icono (`_on`, relleno) o indicador (`PlayingBars`, píldora) |
+| **Active** (toggle encendido, pestaña actual, canción que suena) | Icono o texto en `primary` | Variante de icono (relleno), círculo `primaryContainer` (aleatorio, repetir) o indicador (`PlayingBars`, píldora) |
 | **Focused** (teclado, D-pad, accesibilidad) | Anillo de 2 px en `primary` (en `textPrimary` sobre componentes naranjas), a 2 px del componente | El anillo |
 | **Disabled** | Contenido al 38 %, contenedor al 12 %; no responde | Semántica `enabled: false` |
 | **Loading** | Spinner del tamaño del icono que sustituye; el componente mantiene su tamaño | Semántica "Cargando" |
@@ -816,7 +816,7 @@ componente (no cambian su color de fondo).
 | `TakiPlaylistCard` | Capa + 0.98 | Anillo + marca; sonando: barras | 38 % | — |
 | Botones de icono | Capa circular | `primary` + variante de icono | 38 % | Spinner |
 | Navegación | Capa sobre el indicador | Indicador + relleno + etiqueta 600 | — | — |
-| Controles de reproducción | Capa circular; play: `primaryPressed` | Aleatorio y repetir: `primary` + `_on` | 38 % sin canción | Play: spinner en lugar del icono mientras carga (actual) |
+| Controles de reproducción | Capa circular; play: `primaryPressed` | Aleatorio y repetir: `primary` sobre círculo `primaryContainer` | 38 % sin canción | Play: spinner en lugar del icono mientras carga (actual) |
 
 ---
 
@@ -894,7 +894,7 @@ desplazamientos se sustituyen por fundidos y `PlayingBars` queda quieta
 | Favorito | `primary` | Corazón relleno vs contorno; semántica "Favorita" / `toggled` |
 | Sonando | Título en `primary` | `PlayingBars` visible; semántica "Reproduciendo" |
 | Seleccionado | `primaryContainer` | Marca de verificación; semántica `selected` |
-| Toggle activo (aleatorio, repetir) | `primary` | Variante de icono `_on`; semántica `toggled` / valor |
+| Toggle activo (aleatorio, repetir) | `primary` | Círculo `primaryContainer` detrás del icono ("repetir una" con su icono); semántica `toggled` / valor |
 | Deshabilitado | 38 % | Semántica `enabled: false` |
 | Error | `error` | Icono de error + mensaje en texto |
 | Pestaña activa | `primary` | Indicador, icono relleno, etiqueta en 600; semántica `selected` |
@@ -1041,8 +1041,8 @@ filas vecinas no lo tapen), con las medidas
 
 | Componente | Ubicación | Parte de |
 |---|---|---|
-| `TakiPlaybackControls` | `features/player/presentation/widgets/` | `_Controls` y `_PlayPauseButton` (Reproduciendo) |
-| `TakiProgressBar` | `core/widgets/` si solo recibe posición y duración; si no, en `player` | `_SeekBar` (Reproduciendo) + `_MiniProgressBar` (mini player) |
+| `TakiPlaybackControls` · **implementado (1.6B)** | `core/widgets/` (presentacional: estado y callbacks desde fuera) | `_Controls` y `_PlayPauseButton` (Reproduciendo) |
+| `TakiProgressBar` · **implementado (1.6B)** | `core/widgets/` (recibe posición y duración) | `_SeekBar` (Reproduciendo). La barra de 2 px del mini player no lo usa: es decorativa y no se arrastra |
 | `TakiQueueItem` | `features/player/presentation/widgets/` | `_QueueRow` y `_NowPlayingCard` (Cola); puede componer `TakiSongTile` |
 
 ---
@@ -1108,6 +1108,27 @@ carátula sigue saliendo de `ArtworkCache` como `MemoryImage` (no de
 - **Los iconos `_on`** de Material se dibujan como un cuadrado relleno: en
   naranja pesan más de lo que sugiere §6.2. Pendiente de revisión visual.
 - La cabecera conserva su alto de 56 (no definido en §11).
+
+**Componentes de reproducción (Fase 1.6B):** creados en `core/widgets/`,
+todavía sin usar en ninguna pantalla.
+
+- `TakiPlaybackControls`: `isPlaying`, `isLoading`, `isShuffleEnabled`,
+  `repeatMode` (`TakiRepeatMode`: `off`, `all`, `one`) y los callbacks
+  `onPlayPause`, `onPrevious`, `onNext`, `onShuffle`, `onRepeat` (`null` =
+  deshabilitado). Incluye `TakiPlayPauseButton` (círculo de 72, icono de 40,
+  `primaryPressed`, spinner y "Cargando" mientras carga, fundido con escala
+  de §18).
+- `TakiProgressBar`: `position`, `duration`, `onSeek`, `enabled`. Normaliza
+  valores fuera de rango; con duración 0 o sin `onSeek` no se mueve. El seek
+  se avisa al soltar (también desde TalkBack). Se anuncia como "Progreso de
+  la canción" con valor "1:05 de 3:20".
+- **Huecos de 1.6A resueltos en los componentes:** play/pausa de 72, barra
+  de progreso, valor semántico de repetir e iconos activos (círculo
+  `primaryContainer` en lugar de `_on`). Reproduciendo los aprovechará al
+  integrarlos.
+- **Siguen abiertos:** grosor del spinner (se usa el de Flutter, 4; §17 no lo
+  fija), y los controles necesitan 264 px de ancho (5 controles): la Cola o
+  el mini player, si los usan, necesitarán su propia variante compacta.
 
 **Para cada paso:**
 
