@@ -1195,6 +1195,31 @@ es ahora un adaptador sobre `TakiMiniPlayer`; el App Shell no cambia.
   mini player no muestra carga (no la mostraba antes). `AppColors
   .miniProgressTrack` queda sin uso en `lib`.
 
+**Estado de la Biblioteca (Fase 1.7A, paso 4 en parte):** `LibraryPage`
+migrada; Favoritos todavía no.
+
+- **Filas:** `TakiSongTile` con duración (como antes); tocar reproduce la
+  lista visible y mantener pulsado abre las acciones (sin cambios). Alto
+  medido con una fila real (`SliverPrototypeExtentList`): crece con el
+  tamaño de texto y la lista sigue siendo perezosa.
+- **Canción actual:** estado sonando/en pausa de `TakiSongTile` (título en
+  `primary`, barras sobre la carátula, "Reproduciendo" / "En pausa"). Antes
+  solo el color (I2 resuelto en la Biblioteca).
+- **Cabecera:** "Tu música" en `headline` (encabezado semántico) y el resumen
+  en `trackSubtitle` / `textSecondary`. La barra superior "Biblioteca" sigue
+  siendo la del tema.
+- **Estados:** sin permiso → `TakiErrorState` de permiso; error →
+  `TakiErrorState` con Reintentar; vacío → `TakiEmptyState` de primer uso
+  (`music_off_rounded`, §14) con Reintentar. Mismos textos y acciones; error
+  y vacío conservan el pull-to-refresh. La carga sigue siendo el spinner.
+- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` a 48, como antes
+  (un adaptador privado más; ver el hueco de 1.6E).
+- **Huecos:** sin ⋯ en las filas ni corazón de favorita (§8 los prevé, pero
+  la Biblioteca no los tenía; las acciones siguen en la pulsación larga).
+  `TakiButton` no ajusta ni recorta su texto: con etiquetas largas y texto
+  muy grande puede desbordar (con las fuentes reales, las de estos estados
+  caben al 200 %). Sin filtros ni búsqueda (no existían).
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.

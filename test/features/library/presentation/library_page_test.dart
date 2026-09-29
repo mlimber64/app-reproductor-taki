@@ -1,10 +1,22 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/core/domain/entities/song.dart';
+import 'package:taki/core/domain/ports/artwork_repository.dart';
+import 'package:taki/core/theme/taki_colors.dart';
+import 'package:taki/core/theme/taki_typography.dart';
+import 'package:taki/core/widgets/taki_artwork.dart';
+import 'package:taki/core/widgets/taki_button.dart';
+import 'package:taki/core/widgets/taki_empty_state.dart';
+import 'package:taki/core/widgets/taki_error_state.dart';
+import 'package:taki/core/widgets/taki_playing_indicator.dart';
+import 'package:taki/core/widgets/taki_song_tile.dart';
 import 'package:taki/features/library/presentation/pages/library_page.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
@@ -47,7 +59,18 @@ void main() {
     when(songs.getSongs).thenAnswer((_) async => []);
   });
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    List<Override> overrides = const [],
+    Size? size,
+    double textScale = 1,
+    bool settle = true,
+  }) async {
+    if (size != null) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -62,11 +85,28 @@ void main() {
           playSongsProvider.overrideWithValue(playSongs),
           playNextProvider.overrideWithValue(playNext),
           addToQueueProvider.overrideWithValue(addToQueue),
+          ...overrides,
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const LibraryPage(onSongActions: showSongActions)),
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(textScale),
+            ),
+            child: child!,
+          ),
+          home: const LibraryPage(onSongActions: showSongActions),
+        ),
       ),
     );
-    await tester.pumpAndSettle();
+    // Con una canción sonando las barras se animan sin fin.
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
   }
 
   group('sin permiso', () {
@@ -344,4 +384,290 @@ void main() {
       expect(notifications.requests, 1);
     });
   });
+
+  group('Design System (Fase 1.7A)', () {
+    final list = [
+      buildSong(id: 1, title: 'Alfa', albumId: 11),
+      buildSong(id: 2, title: 'Beta', albumId: 22),
+      buildSong(id: 3, title: 'Gamma', albumId: null),
+    ];
+
+    TakiSongTile tileOf(WidgetTester tester, String title) =>
+        tester.widget<TakiSongTile>(
+          find.ancestor(of: find.text(title), matching: find.byType(TakiSongTile)),
+        );
+
+    testWidgets('cada canción es una TakiSongTile con duración, sin ⋯ ni '
+        'favorito (como antes)', (tester) async {
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(tester);
+
+      expect(find.byType(TakiSongTile), findsNWidgets(3));
+      for (final title in ['Alfa', 'Beta', 'Gamma']) {
+        final tile = tileOf(tester, title);
+        expect(tile.showDuration, isTrue, reason: title);
+        expect(tile.onMore, isNull, reason: title);
+        expect(tile.isFavorite, isFalse, reason: title);
+        expect(tile.onTap, isNotNull, reason: title);
+        expect(tile.onLongPress, isNotNull, reason: title);
+      }
+      expect(find.byTooltip('Más opciones'), findsNothing);
+    });
+
+    testWidgets('la actual: sonando con barras; en pausa, barras quietas',
+        (tester) async {
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(tester);
+
+      player.emitState(
+        PlaybackState(queue: list, currentIndex: 1, isPlaying: true),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(tileOf(tester, 'Beta').playback, TakiNowPlaying.playing);
+      expect(tileOf(tester, 'Alfa').playback, TakiNowPlaying.none);
+      expect(tileOf(tester, 'Gamma').playback, TakiNowPlaying.none);
+      final bars = find.byType(TakiPlayingIndicator);
+      expect(bars, findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Beta'),
+            matching: find.byType(TakiSongTile),
+          ),
+          matching: bars,
+        ),
+        findsOneWidget,
+      );
+      expect(tester.widget<TakiPlayingIndicator>(bars).animate, isTrue);
+
+      player.emitState(PlaybackState(queue: list, currentIndex: 1));
+      await tester.pumpAndSettle();
+      expect(tileOf(tester, 'Beta').playback, TakiNowPlaying.paused);
+      expect(
+        tester.widget<TakiPlayingIndicator>(find.byType(TakiPlayingIndicator))
+            .animate,
+        isFalse,
+      );
+    });
+
+    testWidgets('semántica: título, artista, duración y estado',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(tester);
+      player.emitState(PlaybackState(queue: list, currentIndex: 0));
+      await tester.pumpAndSettle();
+
+      final alfa = find.ancestor(
+        of: find.text('Alfa'),
+        matching: find.byType(TakiSongTile),
+      );
+      expect(
+        tester.getSemantics(alfa),
+        isSemantics(
+          label: 'Alfa, Artista, 3:00',
+          value: TakiSongTile.pausedLabel,
+          isButton: true,
+          hasTapAction: true,
+          hasLongPressAction: true,
+        ),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Tu música')),
+        isSemantics(isHeader: true),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('carátulas desde ArtworkCache (bytes → MemoryImage) a 48',
+        (tester) async {
+      final artwork = _BytesArtworkRepository();
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      TakiArtwork artOf(String title) => tester.widget<TakiArtwork>(
+            find.descendant(
+              of: find.ancestor(
+                of: find.text(title),
+                matching: find.byType(TakiSongTile),
+              ),
+              matching: find.byType(TakiArtwork),
+            ),
+          );
+
+      expect(artOf('Alfa').size, TakiSongTile.artworkSize);
+      expect((artOf('Alfa').image! as MemoryImage).bytes.first, 11);
+      expect((artOf('Beta').image! as MemoryImage).bytes.first, 22);
+      // Sin álbum: placeholder y ninguna petición.
+      expect(artOf('Gamma').image, isNull);
+      expect(artwork.requests.map((r) => r.$1).toSet(), {11, 22});
+    });
+
+    testWidgets('las carátulas no se vuelven a pedir al cambiar de canción',
+        (tester) async {
+      final artwork = _BytesArtworkRepository();
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      final before = artwork.requests.length;
+
+      for (final index in [0, 1, 0]) {
+        player.emitState(PlaybackState(queue: list, currentIndex: index));
+        await tester.pumpAndSettle();
+      }
+      player.emitPosition(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+
+      expect(artwork.requests.length, before);
+    });
+
+    testWidgets('cabecera: "Tu música" en headline y resumen en trackSubtitle',
+        (tester) async {
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await pumpPage(tester);
+
+      final title = tester.widget<Text>(find.text('Tu música')).style!;
+      expect(title.fontFamily, TakiTypography.headline.fontFamily);
+      expect(title.fontSize, TakiTypography.headline.fontSize);
+      expect(title.color, TakiColors.textPrimary);
+      final summary =
+          tester.widget<Text>(find.text('3 canciones · 9 min')).style!;
+      expect(summary.fontSize, TakiTypography.trackSubtitle.fontSize);
+      expect(summary.color, TakiColors.textSecondary);
+    });
+
+    testWidgets('sin permiso: TakiErrorState de permiso', (tester) async {
+      when(permission.isGranted).thenAnswer((_) async => false);
+      await pumpPage(tester);
+
+      final state = tester.widget<TakiErrorState>(find.byType(TakiErrorState));
+      expect(state.kind, TakiErrorStateKind.permission);
+      expect(state.action!.label, 'Permitir acceso');
+      expect(find.byType(RefreshIndicator), findsNothing);
+      expect(
+        tester.getSize(find.widgetWithText(TakiButton, 'Permitir acceso')).height,
+        greaterThanOrEqualTo(48),
+      );
+    });
+
+    testWidgets('vacío: TakiEmptyState de primer uso; pull-to-refresh',
+        (tester) async {
+      await pumpPage(tester);
+
+      final state = tester.widget<TakiEmptyState>(find.byType(TakiEmptyState));
+      expect(state.kind, TakiEmptyStateKind.firstUse);
+      expect(state.icon, Icons.music_off_rounded);
+      expect(find.textContaining('Los audios de menos de'), findsOneWidget);
+
+      await tester.fling(
+        find.text('No encontramos canciones'),
+        const Offset(0, 400),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      verify(songs.getSongs).called(2);
+    });
+
+    testWidgets('error: TakiErrorState de error; Reintentar vuelve a cargar',
+        (tester) async {
+      when(songs.getSongs).thenThrow(Exception('MediaStore no disponible'));
+      await pumpPage(tester);
+
+      final state = tester.widget<TakiErrorState>(find.byType(TakiErrorState));
+      expect(state.kind, TakiErrorStateKind.error);
+
+      when(songs.getSongs).thenAnswer((_) async => list);
+      await tester.tap(find.text('Reintentar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Alfa'), findsOneWidget);
+    });
+
+    testWidgets('error: pull-to-refresh vuelve a escanear', (tester) async {
+      when(songs.getSongs).thenThrow(Exception('MediaStore no disponible'));
+      await pumpPage(tester);
+
+      await tester.fling(
+        find.text('No pudimos leer tu música'),
+        const Offset(0, 400),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      verify(songs.getSongs).called(2);
+    });
+
+    testWidgets('con miles de canciones solo construye las visibles',
+        (tester) async {
+      final many = [
+        for (var i = 0; i < 5000; i++)
+          buildSong(id: i, title: 'S${i.toString().padLeft(4, '0')}'),
+      ];
+      when(songs.getSongs).thenAnswer((_) async => many);
+      await pumpPage(tester);
+
+      expect(find.text('S0000'), findsOneWidget);
+      expect(find.text('S4999'), findsNothing);
+      expect(find.byType(TakiSongTile).evaluate().length, lessThan(30));
+    });
+
+    group('pantallas', () {
+      final long = [
+        buildSong(
+          id: 1,
+          title: 'Un título larguísimo que de ninguna manera cabe en la fila',
+          artist: 'Un artista con un nombre también extraordinariamente largo',
+          durationMs: 3725000,
+        ),
+        ...list.skip(1),
+      ];
+
+      for (final (name, size, scale) in [
+        ('360x800', const Size(360, 800), 1.0),
+        ('412x915', const Size(412, 915), 1.0),
+        ('360x800 con texto al 150 %', const Size(360, 800), 1.5),
+      ]) {
+        testWidgets('$name: sin desbordes y filas de al menos 64',
+            (tester) async {
+          when(songs.getSongs).thenAnswer((_) async => long);
+          await pumpPage(tester, size: size, textScale: scale);
+
+          expect(tester.takeException(), isNull);
+          final row = find.ancestor(
+            of: find.text('Beta'),
+            matching: find.byType(TakiSongTile),
+          );
+          final rect = tester.getRect(row);
+          expect(rect.height, greaterThanOrEqualTo(TakiSongTile.minHeight));
+          // El texto crece dentro de la fila, no se sale de ella.
+          expect(tester.getRect(find.text('Beta')).bottom,
+              lessThanOrEqualTo(rect.bottom));
+        });
+      }
+
+      // A escala 1: con la fuente de pruebas (cada letra tan ancha como alta)
+      // el texto de TakiButton no cabe al 150 % (gap de core documentado).
+      testWidgets('estado de permiso a 360x800 sin desbordes', (tester) async {
+        when(permission.isGranted).thenAnswer((_) async => false);
+        await pumpPage(tester, size: const Size(360, 800));
+        expect(tester.takeException(), isNull);
+      });
+    });
+  });
+}
+
+/// Carátulas de prueba: bytes con el álbum pedido; cuenta las peticiones.
+class _BytesArtworkRepository implements ArtworkRepository {
+  final requests = <(int, int)>[];
+
+  @override
+  Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
+    requests.add((albumId, size));
+    return Uint8List.fromList([albumId, size]);
+  }
 }
