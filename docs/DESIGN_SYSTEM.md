@@ -983,7 +983,7 @@ documento: si cambia uno de los dos, fallan.
 | `TakiPlaylistCard` · **implementado (1.4B), variante fila** | `core/widgets/` (recibe datos, no providers) | `_PlaylistRow` (Playlists) |
 | `TakiEmptyState` · **implementado (1.4B)** | `core/widgets/` | `MessageView` (casos vacíos) |
 | `TakiErrorState` · **implementado (1.4B)** | `core/widgets/` | `MessageView` (casos de error y permiso) |
-| `TakiMiniPlayer` · **implementado (1.4B)** | `core/widgets/`: presentacional, recibe estado y callbacks; lo conecta con los providers del reproductor la feature `player` | `MiniPlayer` |
+| `TakiMiniPlayer` · **implementado (1.4B), en el App Shell (1.6E)** | `core/widgets/`: presentacional, recibe estado y callbacks; lo conecta con los providers del reproductor la feature `player` | `MiniPlayer` |
 | `TakiPlayingIndicator` · **implementado (1.4B)** | `core/widgets/` | `PlayingBars` (lo necesitan filas y tarjetas de todas las features) |
 
 **API de los componentes implementados (Fase 1.4A).** Coexisten con los
@@ -1169,6 +1169,31 @@ confirmación, cerrar).
   `textSecondary`), no pantallas vacías: `TakiEmptyState` (icono, título
   `titleLarge`) no encaja y no se inventa uno. Con la fila actual
   enmarcada, su carátula queda 8 px más adentro que las de la lista.
+
+**Estado del mini player (Fase 1.6E):** `MiniPlayer` (feature `player`)
+es ahora un adaptador sobre `TakiMiniPlayer`; el App Shell no cambia.
+
+- Mismo comportamiento: sin canción no ocupa espacio; tocar o deslizar
+  hacia arriba abre Reproduciendo; play/pausa con `TogglePlayPause`; el
+  progreso es posición / duración (sin duración, 0). Como antes, **sin
+  siguiente ni favorito** (el componente los admite, pero no se añaden).
+- Márgenes de §10: 8 a los lados (antes 12) y 8 hasta la navegación.
+  Carátula de 48 (antes 44), play/pausa `inverse` (círculo de 40, antes 44),
+  `trackTitle` / `trackSubtitle` y barra de 2 px en `divider` → `primary`
+  (antes 3 px), decorativa: no es un control de seek.
+- Carátula: `ArtworkCache` → bytes → `MemoryImage`, como Reproduciendo y la
+  Cola. Solo la parte que dibuja el componente escucha la posición; la
+  carátula no se vuelve a resolver.
+- Semántica: se anuncia la canción ("título, artista"), el estado
+  ("Reproduciendo" / "En pausa") y la pista "Abrir Reproduciendo"; antes
+  solo "Abrir Reproduciendo".
+- **Huecos:** `TakiMiniPlayer` recibe el progreso como valor, así que con
+  cada posición se reconstruye el componente entero (antes solo la barra);
+  el coste es bajo, pero un `ValueListenable` lo evitaría. La resolución de
+  carátulas (bytes → `MemoryImage`) está repetida en Reproduciendo, la Cola
+  y el mini player: candidata a un único adaptador de la feature. El
+  mini player no muestra carga (no la mostraba antes). `AppColors
+  .miniProgressTrack` queda sin uso en `lib`.
 
 **Para cada paso:**
 
