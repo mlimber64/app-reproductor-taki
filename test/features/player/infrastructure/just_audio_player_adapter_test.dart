@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/player/domain/entities/playback_error.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/infrastructure/just_audio_player_adapter.dart';

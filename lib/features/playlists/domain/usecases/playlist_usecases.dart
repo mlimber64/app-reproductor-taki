@@ -1,5 +1,5 @@
-import '../../../library/domain/entities/song.dart';
-import '../../../library/domain/services/song_matcher.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/services/song_matcher.dart';
 import '../entities/playlist_entry.dart';
 import '../entities/playlist_name.dart';
 import '../ports/playlists_repository.dart';

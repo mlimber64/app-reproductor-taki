@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/taki_database_provider.dart';
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../../../library/presentation/providers/songs_notifier.dart';
 import '../../domain/entities/playlist.dart';
 import '../../domain/entities/playlist_entry.dart';

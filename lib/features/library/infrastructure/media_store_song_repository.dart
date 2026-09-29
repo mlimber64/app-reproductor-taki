@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../domain/entities/song.dart';
+import '../../../core/domain/entities/song.dart';
 import '../domain/ports/song_repository.dart';
 import 'media_store_channel.dart';
 

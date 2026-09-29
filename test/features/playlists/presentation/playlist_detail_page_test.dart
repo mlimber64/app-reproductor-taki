@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 import 'package:taki/features/playlists/presentation/pages/playlist_detail_page.dart';
 import 'package:taki/features/playlists/presentation/providers/playlists_providers.dart';
@@ -64,7 +65,10 @@ void main() {
               body: TextButton(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => PlaylistDetailPage(playlistId: playlistId),
+                    builder: (_) => PlaylistDetailPage(
+                      playlistId: playlistId,
+                      onSongActions: showSongActions,
+                    ),
                   ),
                 ),
                 child: const Text('Base'),

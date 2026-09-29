@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 
 /// `AudioPlayer` falso que imita cómo just_audio mantiene la lista de fuentes,
 /// el índice actual y el [ShuffleOrder] al añadir, quitar y mover. Registra

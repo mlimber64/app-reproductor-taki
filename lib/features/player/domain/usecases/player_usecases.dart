@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../entities/playback_state.dart';
 import '../ports/audio_player_port.dart';
 

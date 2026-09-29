@@ -10,6 +10,7 @@ import '../features/player/presentation/widgets/mini_player.dart';
 import '../features/playlists/presentation/pages/playlist_detail_page.dart';
 import '../features/playlists/presentation/pages/playlists_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
+import 'widgets/song_actions_sheet.dart';
 
 abstract final class AppRoutes {
   static const String library = '/library';
@@ -35,7 +36,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.library,
-                builder: (context, state) => const LibraryPage(),
+                builder: (context, state) =>
+                    const LibraryPage(onSongActions: showSongActions),
               ),
             ],
           ),
@@ -54,6 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => PlaylistDetailPage(
                       playlistId:
                           int.tryParse(state.pathParameters['id'] ?? '') ?? -1,
+                      onSongActions: showSongActions,
                     ),
                   ),
                 ],
@@ -64,7 +67,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: AppRoutes.favorites,
-                builder: (context, state) => const FavoritesPage(),
+                builder: (context, state) =>
+                    const FavoritesPage(onSongActions: showSongActions),
               ),
             ],
           ),

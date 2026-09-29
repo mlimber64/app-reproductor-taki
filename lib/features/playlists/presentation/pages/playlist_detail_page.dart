@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../../app/widgets/play_shuffle_buttons.dart';
-import '../../../../app/widgets/song_actions_sheet.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/duration_format.dart';
 import '../../../../core/widgets/message_view.dart';
+import '../../../../core/widgets/play_shuffle_buttons.dart';
+import '../../../../core/widgets/song_actions.dart';
+import '../../../../core/widgets/song_tile.dart';
 import '../../../library/presentation/providers/songs_notifier.dart';
-import '../../../library/presentation/widgets/song_tile.dart';
 import '../../../player/presentation/providers/player_providers.dart';
 import '../../domain/entities/playlist.dart';
 import '../../domain/entities/playlist_entry.dart';
@@ -24,9 +24,16 @@ import '../widgets/playlist_name_dialog.dart';
 /// La lista muestra solo las canciones que están en la biblioteca; al mover o
 /// quitar se traduce a las posiciones reales de la playlist.
 class PlaylistDetailPage extends ConsumerStatefulWidget {
-  const PlaylistDetailPage({super.key, required this.playlistId});
+  const PlaylistDetailPage({
+    super.key,
+    required this.playlistId,
+    required this.onSongActions,
+  });
 
   final int playlistId;
+
+  /// Menú de acciones de una canción (pulsación larga o menú "⋯").
+  final ShowSongActions onSongActions;
 
   @override
   ConsumerState<PlaylistDetailPage> createState() =>
@@ -202,6 +209,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
               onShuffle: _playShuffled,
               onReorder: _reorder,
               onRemove: _remove,
+              onSongActions: widget.onSongActions,
             ),
           ),
         );
@@ -226,10 +234,12 @@ class _SongList extends ConsumerWidget {
     required this.onShuffle,
     required this.onReorder,
     required this.onRemove,
+    required this.onSongActions,
   });
 
   final Playlist playlist;
   final List<PlaylistItem> items;
+  final ShowSongActions onSongActions;
   final void Function(List<PlaylistItem> items, int index) onPlay;
   final void Function(List<PlaylistItem> items) onShuffle;
   final void Function(List<PlaylistItem> items, int oldIndex, int newIndex)
@@ -237,7 +247,7 @@ class _SongList extends ConsumerWidget {
   final void Function(List<PlaylistItem> items, PlaylistItem item) onRemove;
 
   void _showActions(BuildContext context, WidgetRef ref, PlaylistItem item) {
-    showSongActions(
+    onSongActions(
       context,
       ref,
       item.song,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../library/presentation/widgets/artwork_image.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/artwork_image.dart';
 import '../providers/player_providers.dart';
 
 /// Reproductor compacto sobre la barra inferior. Sin canción actual no ocupa

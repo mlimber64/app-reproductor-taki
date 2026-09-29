@@ -3,31 +3,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/library/domain/entities/song.dart';
+import '../../core/domain/entities/song.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/widgets/song_actions.dart';
 import '../../features/library/presentation/providers/favorites_providers.dart';
 import '../../features/player/presentation/providers/player_providers.dart';
 import '../../features/playlists/presentation/widgets/add_to_playlist_sheet.dart';
-import '../theme/app_colors.dart';
 
 // Vive en app/ porque combina varias features (cola, favoritos y playlists).
 
 enum SongAction { playNext, addToQueue, toggleFavorite, addToPlaylist }
 
-/// Acción adicional propia de una pantalla (p. ej. "Quitar de la playlist").
-class ExtraSongAction {
-  const ExtraSongAction({
-    required this.icon,
-    required this.label,
-    required this.onSelected,
-  });
-
-  final IconData icon;
-  final String label;
-  final Future<void> Function() onSelected;
-}
-
 /// Acciones de una canción (pulsación larga o menú "⋯"): cola, favoritos,
 /// playlists y las [extraActions] de la pantalla. Confirma con un SnackBar.
+///
+/// Es un [ShowSongActions]: el router lo pasa a las páginas que lo usan.
 Future<void> showSongActions(
   BuildContext context,
   WidgetRef ref,

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/core/constants/library_constants.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/library/domain/services/song_filter.dart';
 
 import '../../../helpers/library_fakes.dart';

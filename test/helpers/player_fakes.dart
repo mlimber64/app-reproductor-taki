@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/player/domain/entities/playback_error.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/domain/ports/audio_player_port.dart';

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
-import 'package:taki/features/library/presentation/providers/library_providers.dart';
+import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/pages/queue_page.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';

@@ -1,4 +1,4 @@
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../entities/playback_error.dart';
 import '../entities/playback_state.dart';
 

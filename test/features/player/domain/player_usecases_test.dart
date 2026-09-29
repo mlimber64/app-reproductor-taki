@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/domain/usecases/player_usecases.dart';
 

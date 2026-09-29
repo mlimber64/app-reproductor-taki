@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 
 enum RepeatMode { off, all, one }
 

@@ -3,20 +3,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../../app/widgets/song_actions_sheet.dart';
 import '../../../../core/constants/library_constants.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/duration_format.dart';
 import '../../../../core/widgets/message_view.dart';
+import '../../../../core/widgets/song_actions.dart';
+import '../../../../core/widgets/song_tile.dart';
 import '../../../player/presentation/providers/player_providers.dart';
-import '../../domain/entities/song.dart';
 import '../providers/songs_notifier.dart';
-import '../widgets/song_tile.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
-  const LibraryPage({super.key});
+  const LibraryPage({super.key, required this.onSongActions});
 
   static const String title = 'Biblioteca';
+
+  /// Menú de acciones de una canción (pulsación larga).
+  final ShowSongActions onSongActions;
 
   @override
   ConsumerState<LibraryPage> createState() => _LibraryPageState();
@@ -83,7 +86,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
           LibraryLoaded() => RefreshIndicator(
               onRefresh: notifier.rescan,
-              child: _SongList(library: state),
+              child: _SongList(
+                library: state,
+                onSongActions: widget.onSongActions,
+              ),
             ),
         },
       ),
@@ -92,9 +98,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 }
 
 class _SongList extends ConsumerWidget {
-  const _SongList({required this.library});
+  const _SongList({required this.library, required this.onSongActions});
 
   final LibraryLoaded library;
+  final ShowSongActions onSongActions;
 
   /// Reproduce la lista tal como se ve, desde la canción tocada.
   Future<void> _play(WidgetRef ref, List<Song> songs, int index) async {
@@ -121,7 +128,7 @@ class _SongList extends ConsumerWidget {
             song: songs[index],
             isCurrent: songs[index].id == currentSongId,
             onTap: () => _play(ref, songs, index),
-            onLongPress: () => showSongActions(context, ref, songs[index]),
+            onLongPress: () => onSongActions(context, ref, songs[index]),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 16)),

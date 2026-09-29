@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-import 'song_reference.dart';
+import '../../../../core/domain/entities/song_reference.dart';
 
 /// Canción marcada como favorita, tal como se guardó.
 ///

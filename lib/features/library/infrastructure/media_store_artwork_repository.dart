@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../domain/ports/artwork_repository.dart';
+import '../../../core/domain/ports/artwork_repository.dart';
 import 'media_store_channel.dart';
 
 /// Carátulas desde MediaStore (miniaturas del sistema, incluidas las

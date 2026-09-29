@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../../domain/entities/playback_state.dart';
 import '../../domain/ports/audio_player_port.dart';
 import '../../domain/ports/notification_permission_port.dart';

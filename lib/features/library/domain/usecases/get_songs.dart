@@ -1,4 +1,4 @@
-import '../entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../ports/song_repository.dart';
 import '../services/song_filter.dart';
 

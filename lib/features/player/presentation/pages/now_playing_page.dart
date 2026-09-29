@@ -3,11 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/widgets/artwork_image.dart';
 import '../../../library/presentation/providers/favorites_providers.dart';
-import '../../../library/presentation/widgets/artwork_image.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
 

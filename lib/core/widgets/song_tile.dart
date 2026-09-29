@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../../core/utils/duration_format.dart';
-import '../../domain/entities/song.dart';
+import '../domain/entities/song.dart';
+import '../theme/app_colors.dart';
+import '../utils/duration_format.dart';
 import 'artwork_image.dart';
 
 /// Fila de canción: carátula, título, artista y duración. Alto fijo de 64.

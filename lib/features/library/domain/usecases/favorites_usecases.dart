@@ -1,6 +1,6 @@
-import '../entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/services/song_matcher.dart';
 import '../ports/favorites_repository.dart';
-import '../services/song_matcher.dart';
 
 /// Marca o desmarca [Song] según su estado actual. Devuelve `true` si quedó
 /// como favorita.

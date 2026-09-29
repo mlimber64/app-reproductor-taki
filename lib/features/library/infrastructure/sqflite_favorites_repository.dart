@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/taki_database.dart';
+import '../../../core/domain/entities/song.dart';
 import '../domain/entities/favorite_entry.dart';
-import '../domain/entities/song.dart';
 import '../domain/ports/favorites_repository.dart';
 
 /// [FavoritesRepository] sobre la tabla `favorites` de `taki.db`.

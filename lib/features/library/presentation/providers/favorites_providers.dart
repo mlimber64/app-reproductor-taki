@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/taki_database_provider.dart';
-import '../../domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 import '../../domain/ports/favorites_repository.dart';
 import '../../domain/usecases/favorites_usecases.dart';
 import '../../infrastructure/sqflite_favorites_repository.dart';

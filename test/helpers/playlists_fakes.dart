@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/playlists/domain/entities/playlist.dart';
 import 'package:taki/features/playlists/domain/entities/playlist_entry.dart';
 import 'package:taki/features/playlists/domain/ports/playlists_repository.dart';

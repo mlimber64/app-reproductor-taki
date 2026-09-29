@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../library/domain/entities/song.dart';
 import '../../domain/entities/playlist.dart';
 import '../providers/playlists_providers.dart';
 import 'playlist_cover.dart';

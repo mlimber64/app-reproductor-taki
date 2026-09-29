@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../../library/domain/entities/song.dart';
-import '../../library/domain/ports/artwork_repository.dart';
+import '../../../core/domain/entities/song.dart';
+import '../../../core/domain/ports/artwork_repository.dart';
 
 /// Guarda carátulas como archivos en la caché de la app para la notificación
 /// y la pantalla de bloqueo, que necesitan una URI (`file://…`), no bytes.

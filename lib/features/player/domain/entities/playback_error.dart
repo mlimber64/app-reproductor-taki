@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../library/domain/entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 
 /// Una canción de la cola no se pudo reproducir (archivo borrado, corrupto…).
 class PlaybackError extends Equatable {

@@ -4,15 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/library/presentation/pages/library_page.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
-import '../../../helpers/playlists_fakes.dart';
 import '../../../helpers/player_fakes.dart';
+import '../../../helpers/playlists_fakes.dart';
 
 void main() {
   late MockMediaPermission permission;
@@ -64,7 +65,7 @@ void main() {
           playNextProvider.overrideWithValue(playNext),
           addToQueueProvider.overrideWithValue(addToQueue),
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const LibraryPage()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const LibraryPage(onSongActions: showSongActions)),
       ),
     );
     await tester.pumpAndSettle();

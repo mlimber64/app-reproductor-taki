@@ -3,21 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../../app/widgets/play_shuffle_buttons.dart';
-import '../../../../app/widgets/song_actions_sheet.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/duration_format.dart';
 import '../../../../core/widgets/message_view.dart';
+import '../../../../core/widgets/play_shuffle_buttons.dart';
+import '../../../../core/widgets/song_actions.dart';
+import '../../../../core/widgets/song_tile.dart';
 import '../../../player/presentation/providers/player_providers.dart';
-import '../../domain/entities/song.dart';
 import '../providers/favorites_providers.dart';
 import '../providers/songs_notifier.dart';
-import '../widgets/song_tile.dart';
 
 class FavoritesPage extends ConsumerWidget {
-  const FavoritesPage({super.key});
+  const FavoritesPage({super.key, required this.onSongActions});
 
   static const String title = 'Favoritos';
+
+  /// Menú de acciones de una canción (pulsación larga).
+  final ShowSongActions onSongActions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -59,7 +62,10 @@ class FavoritesPage extends ConsumerWidget {
                     )
                   : RefreshIndicator(
                       onRefresh: ref.read(songsProvider.notifier).rescan,
-                      child: _FavoritesList(songs: songs),
+                      child: _FavoritesList(
+                        songs: songs,
+                        onSongActions: onSongActions,
+                      ),
                     ),
             ),
     );
@@ -67,9 +73,10 @@ class FavoritesPage extends ConsumerWidget {
 }
 
 class _FavoritesList extends ConsumerWidget {
-  const _FavoritesList({required this.songs});
+  const _FavoritesList({required this.songs, required this.onSongActions});
 
   final List<Song> songs;
+  final ShowSongActions onSongActions;
 
   Future<void> _play(WidgetRef ref, int index) async {
     await ref.read(playSongsProvider).call(songs, index);
@@ -104,7 +111,7 @@ class _FavoritesList extends ConsumerWidget {
             song: songs[index],
             isCurrent: songs[index].id == currentSongId,
             onTap: () => _play(ref, index),
-            onLongPress: () => showSongActions(context, ref, songs[index]),
+            onLongPress: () => onSongActions(context, ref, songs[index]),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 16)),

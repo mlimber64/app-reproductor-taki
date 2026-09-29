@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/taki_database.dart';
-import '../../library/domain/entities/song.dart';
+import '../../../core/domain/entities/song.dart';
 import '../domain/entities/playlist.dart';
 import '../domain/entities/playlist_entry.dart';
 import '../domain/ports/playlists_repository.dart';

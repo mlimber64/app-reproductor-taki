@@ -1,5 +1,5 @@
 import '../../../../core/constants/library_constants.dart';
-import '../entities/song.dart';
+import '../../../../core/domain/entities/song.dart';
 
 /// Decide qué audios son canciones de la biblioteca.
 ///

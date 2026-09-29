@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../../../library/presentation/widgets/artwork_image.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/artwork_image.dart';
 
 /// Portada de playlist: mosaico 2×2 si sus primeras canciones tienen 4
 /// carátulas distintas; si no, la carátula de la primera. Sin canciones, un

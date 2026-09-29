@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 
-import '../../library/domain/entities/song.dart';
+import '../../../core/domain/entities/song.dart';
 import '../domain/entities/playback_state.dart' as player;
 import '../domain/ports/audio_player_port.dart';
 import 'artwork_file_cache.dart';

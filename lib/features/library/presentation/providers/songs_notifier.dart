@@ -1,7 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/entities/song.dart';
+import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/domain/entities/song.dart';
 import 'library_providers.dart';
 
 /// Estados de la biblioteca. "Cargando" y "error" los cubre [AsyncValue].

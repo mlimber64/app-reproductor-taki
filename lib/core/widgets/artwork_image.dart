@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/app_colors.dart';
-import '../providers/artwork_cache.dart';
-import '../providers/library_providers.dart';
+import '../artwork/artwork_cache.dart';
+import '../artwork/artwork_providers.dart';
+import '../theme/app_colors.dart';
 
 /// Carátula de álbum con esquinas redondeadas.
 ///

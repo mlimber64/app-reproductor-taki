@@ -1,7 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 
-import '../../library/domain/ports/artwork_repository.dart';
+import '../../../core/domain/ports/artwork_repository.dart';
 import 'artwork_file_cache.dart';
 import 'just_audio_player_adapter.dart';
 import 'taki_audio_handler.dart';

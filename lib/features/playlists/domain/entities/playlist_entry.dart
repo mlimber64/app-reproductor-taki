@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
-import '../../../library/domain/entities/song.dart';
-import '../../../library/domain/entities/song_reference.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/entities/song_reference.dart';
 
 /// Una canción dentro de una playlist, tal como se guardó: id de la entrada,
 /// su posición y la referencia de respaldo a la canción.

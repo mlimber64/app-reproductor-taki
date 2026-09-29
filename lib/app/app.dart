@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/router.dart';
+import '../app/theme/app_theme.dart';
 import '../features/library/presentation/providers/favorites_providers.dart';
-import 'router.dart';
-import 'theme/app_theme.dart';
 
 class TakiApp extends ConsumerWidget {
   const TakiApp({super.key});

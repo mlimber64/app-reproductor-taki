@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import '../../../../core/utils/lru_cache.dart';
-import '../../domain/ports/artwork_repository.dart';
+import '../domain/ports/artwork_repository.dart';
+import '../utils/lru_cache.dart';
 
 typedef ArtworkKey = ({int albumId, int size});
 

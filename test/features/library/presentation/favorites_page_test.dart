@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
+import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/library/presentation/pages/favorites_page.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 
@@ -52,7 +53,7 @@ void main() {
           playSongsProvider.overrideWithValue(playSongs),
           playSongsShuffledProvider.overrideWithValue(playShuffled),
         ],
-        child: MaterialApp(theme: AppTheme.dark(), home: const FavoritesPage()),
+        child: MaterialApp(theme: AppTheme.dark(), home: const FavoritesPage(onSongActions: showSongActions)),
       ),
     );
     await tester.pumpAndSettle();

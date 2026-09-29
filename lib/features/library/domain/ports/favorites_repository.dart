@@ -1,5 +1,5 @@
+import '../../../../core/domain/entities/song.dart';
 import '../entities/favorite_entry.dart';
-import '../entities/song.dart';
 
 /// Canciones favoritas guardadas.
 abstract interface class FavoritesRepository {

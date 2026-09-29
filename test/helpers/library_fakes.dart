@@ -2,8 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/features/library/domain/entities/song.dart';
-import 'package:taki/features/library/domain/ports/artwork_repository.dart';
+import 'package:taki/core/artwork/artwork_providers.dart';
+import 'package:taki/core/domain/entities/song.dart';
+import 'package:taki/core/domain/ports/artwork_repository.dart';
 import 'package:taki/features/library/domain/ports/media_permission_port.dart';
 import 'package:taki/features/library/domain/ports/song_repository.dart';
 import 'package:taki/features/library/domain/ports/favorites_repository.dart';
