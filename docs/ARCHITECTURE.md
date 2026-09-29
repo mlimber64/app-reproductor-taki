@@ -69,7 +69,9 @@ shell.
   pestaña conserva su estado) y las rutas `/now-playing` y `/queue`.
 - `AppTheme` (`app/theme/app_theme.dart`) construye el `ThemeData` Material 3
   oscuro a partir de los tokens de `core/theme` (Sora para títulos, DM Sans
-  para el resto, vía `google_fonts`).
+  para el resto). Ambas son assets locales en `assets/fonts/`, declaradas en
+  la sección `fonts:` de `pubspec.yaml`: no se descargan en tiempo de
+  ejecución y `google_fonts` ya no es una dependencia.
 - UI que coordina varias features: `showSongActions` / `SongActionsSheet`
   (`app/widgets/song_actions_sheet.dart`) combina cola (`player`), favoritos
   (`library`) y playlists (`playlists`).

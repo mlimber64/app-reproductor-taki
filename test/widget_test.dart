@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:taki/app/app.dart';
 
 import 'helpers/library_fakes.dart';
 
 void main() {
-  setUpAll(() {
-    // Los tests no tienen red: evita que google_fonts intente descargar.
-    GoogleFonts.config.allowRuntimeFetching = false;
-  });
-
   testWidgets('la app arranca y muestra las 4 pestañas', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

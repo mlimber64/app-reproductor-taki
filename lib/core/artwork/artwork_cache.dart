@@ -30,7 +30,11 @@ class ArtworkCache {
         .then((bytes) {
       _cache.put(key, bytes);
       return bytes;
-    }).whenComplete(() => _inFlight.remove(key));
+    }).whenComplete(() {
+      // Bloque sin valor: `remove` devuelve este mismo futuro y, si el
+      // callback lo devolviera, whenComplete lo esperaría (nunca completaría).
+      _inFlight.remove(key);
+    });
   }
 
   void clear() => _cache.clear();

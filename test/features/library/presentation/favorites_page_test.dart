@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/app/widgets/song_actions_sheet.dart';
@@ -25,7 +24,6 @@ void main() {
   final gamma = buildSong(id: 3, title: 'Gamma');
 
   setUpAll(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
     registerFallbackValue(<Song>[]);
   });
 

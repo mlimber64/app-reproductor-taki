@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/core/theme/app_colors.dart';
 import 'package:taki/app/theme/app_theme.dart';
@@ -28,7 +27,6 @@ void main() {
   );
 
   setUpAll(() {
-    GoogleFonts.config.allowRuntimeFetching = false;
     registerFallbackValue(Duration.zero);
   });
 

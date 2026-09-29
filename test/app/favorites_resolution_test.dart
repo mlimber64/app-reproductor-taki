@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/app.dart';
 import 'package:taki/features/library/domain/entities/favorite_entry.dart';
@@ -12,8 +11,6 @@ import '../helpers/library_fakes.dart';
 import '../helpers/player_fakes.dart';
 
 void main() {
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
-
   testWidgets(
       'un favorito cuyo id cambió se reencuentra al cargar la biblioteca, '
       'sin abrir la pestaña Favoritos', (tester) async {

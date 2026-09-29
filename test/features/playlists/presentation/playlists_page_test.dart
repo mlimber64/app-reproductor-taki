@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/app.dart';
 import 'package:taki/features/playlists/presentation/pages/playlist_detail_page.dart';
@@ -14,8 +13,6 @@ void main() {
 
   final a = buildSong(id: 1, title: 'A', durationMs: 120000);
   final b = buildSong(id: 2, title: 'B', durationMs: 180000);
-
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   setUp(() => playlists = FakePlaylistsRepository());
 

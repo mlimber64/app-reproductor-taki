@@ -41,7 +41,6 @@ dependencies:
   audio_service: ^0.18.19
   permission_handler: ^12.0.3
   sqflite: ^2.4.2+1
-  google_fonts: ^8.2.1
   device_info_plus: ^13.2.0
   path_provider: ^2.1.6
   audio_session: ^0.2.4
@@ -71,6 +70,33 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Tipografías de Taki (docs/DESIGN_SYSTEM.md §2), empaquetadas en la app para
+  # que funcionen sin conexión y en release. Solo los pesos que se usan.
+  # Licencia: SIL Open Font License 1.1; los textos viajan con las fuentes.
+  assets:
+    - assets/fonts/Sora-OFL.txt
+    - assets/fonts/DMSans-OFL.txt
+
+  fonts:
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Sora-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Sora-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Sora-Bold.ttf
+          weight: 700
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-SemiBold.ttf
+          weight: 600
 
   # To add assets to your application, add an assets section, like this:
   # assets:

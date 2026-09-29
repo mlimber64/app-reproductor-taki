@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/taki_typography.dart';
 
 /// Tema oscuro Material 3 de Taki.
 ///
-/// Sora para títulos (display/headline/title) y DM Sans para el resto.
+/// Sora para títulos (display/headline/title) y DM Sans para el resto. Ambas
+/// van empaquetadas en la app (ver `fonts:` en pubspec.yaml). Las familias
+/// salen de [TakiTypography]; tamaños y colores aún son los del tema
+/// anterior (la migración a los tokens Taki* es una fase posterior).
 abstract final class AppTheme {
+  static const String _titleFontFamily = TakiTypography.titleFontFamily;
+  static const String _bodyFontFamily = TakiTypography.bodyFontFamily;
+
   /// Área táctil mínima recomendada (Material / accesibilidad).
   static const double minTouchTarget = 48;
 
@@ -130,14 +136,14 @@ abstract final class AppTheme {
   }
 
   static TextTheme _textTheme() {
-    final base = GoogleFonts.dmSansTextTheme(
-      ThemeData(brightness: Brightness.dark).textTheme,
-    ).apply(
-      bodyColor: AppColors.textPrimary,
-      displayColor: AppColors.textPrimary,
-    );
+    final base = ThemeData(brightness: Brightness.dark).textTheme.apply(
+          fontFamily: _bodyFontFamily,
+          bodyColor: AppColors.textPrimary,
+          displayColor: AppColors.textPrimary,
+        );
 
-    TextStyle? sora(TextStyle? style) => GoogleFonts.sora(textStyle: style);
+    TextStyle? sora(TextStyle? style) =>
+        style?.copyWith(fontFamily: _titleFontFamily);
 
     return base.copyWith(
       displayLarge: sora(base.displayLarge),

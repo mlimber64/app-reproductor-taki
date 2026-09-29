@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
@@ -20,8 +19,6 @@ void main() {
   final b = buildSong(id: 2, title: 'B', artist: 'Artista B');
   final c = buildSong(id: 3, title: 'C', durationMs: 120000);
   final d = buildSong(id: 4, title: 'D', durationMs: 180000);
-
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   setUp(() => player = FakeAudioPlayerPort());
 

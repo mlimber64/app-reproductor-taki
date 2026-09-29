@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/app.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
@@ -21,8 +20,6 @@ void main() {
     artist: 'Artista de prueba',
     durationMs: 200000,
   );
-
-  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   setUp(() {
     player = FakeAudioPlayerPort();
