@@ -22,4 +22,17 @@ abstract final class AppColors {
 
   /// Color de contenido sobre el acento (ámbar claro → texto oscuro).
   static const Color onAccent = background;
+
+  /// Contenido sobre fondos claros de [textPrimary] (p. ej. botón play).
+  static const Color onTextPrimary = background;
+
+  // Reproductor
+  /// Pista de la barra de progreso del mini player.
+  static const Color miniProgressTrack = Color(0xFF343946);
+
+  /// Pista de la barra de búsqueda (seek) de la pantalla Reproduciendo.
+  static const Color seekTrack = border;
+
+  /// Sombra suave de la carátula grande.
+  static const Color artworkShadow = Color(0x66000000);
 }

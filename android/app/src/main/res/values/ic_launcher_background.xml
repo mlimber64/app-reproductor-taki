@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Azul marino del borde del ícono (icon-app.png). -->
+    <color name="ic_launcher_background">#0E0F30</color>
+</resources>

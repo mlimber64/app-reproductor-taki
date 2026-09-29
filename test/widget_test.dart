@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:taki/app/app.dart';
 
+import 'helpers/library_fakes.dart';
+
 void main() {
   setUpAll(() {
     // Los tests no tienen red: evita que google_fonts intente descargar.
@@ -11,7 +13,12 @@ void main() {
   });
 
   testWidgets('la app arranca y muestra las 4 pestañas', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: TakiApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: grantedEmptyLibraryOverrides(),
+        child: const TakiApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final navBar = find.byType(NavigationBar);
@@ -30,7 +37,12 @@ void main() {
   });
 
   testWidgets('navega entre pestañas', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: TakiApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: grantedEmptyLibraryOverrides(),
+        child: const TakiApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final navBar = find.byType(NavigationBar);
