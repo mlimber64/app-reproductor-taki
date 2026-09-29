@@ -1064,6 +1064,30 @@ verde y una revisión en dispositivo. Nunca se reescribe toda la UI de golpe.
 | **7. Ajustes** | Primera pantalla real de Ajustes construida ya con el sistema | Nueva pantalla |
 | **8. Pulido** | Movimiento (§18), movimiento reducido, revisión de accesibilidad (texto 200 %, TalkBack), limpieza de tokens antiguos | Detalles |
 
+**Estado del App Shell (Fase 1.5, pasos 1 y 3 en parte):**
+
+- `AppTheme` usa los tokens Taki: esquema de color, superficies por nivel,
+  navegación inferior (§16), botones del tema (§9), sheets y diálogos
+  (nivel 2 con `scrim`, radio `xl`), menús (`lg`), SnackBar (§15: flotante,
+  `surfaceElevated`, radio `md`, 8 sobre el bloque inferior; a los lados el
+  margen de página de 16, que §15 no fija) y tooltips (`surfaceHighest`,
+  radio `sm`, texto `textPrimary` para que se lea sobre fondo oscuro).
+- `AppColors` es un **alias** de `TakiColors`: las pantallas legacy ya usan
+  la paleta Taki sin tocar su código. Se elimina cuando no quede ningún uso.
+- Tipografía del tema: los estilos de Material con equivalente directo usan
+  el rol de §2.2 (`headlineSmall` → `headline`, `titleLarge`,
+  `titleMedium`, `bodyLarge`, `bodyMedium` → `body`, `labelLarge` →
+  `label`). **Sin rol definido todavía** (conservan el tamaño de Material con
+  las familias Taki): `display*`, `headlineLarge`, `headlineMedium`,
+  `titleSmall`, `bodySmall`, `labelMedium`, `labelSmall`.
+- **Pendiente:** el mini player sigue siendo el widget legacy de
+  `features/player` (sus márgenes de 12, la carátula de 44 y la barra de 3 px
+  viven dentro de él); pasará a `TakiMiniPlayer` con la migración del
+  reproductor. Los iconos de la navegación siguen siendo los actuales (no la
+  variante `_rounded` de §6.1). No hay tema de campos de texto
+  (`InputDecorationTheme`) ni de slider global; `onErrorContainer` sale del
+  esquema por defecto de Material.
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.
