@@ -26,7 +26,8 @@ enum TakiRepeatMode {
 /// suena ni cómo. Un callback `null` deja su control deshabilitado (38 %).
 ///
 /// - Play/pausa: círculo de 72 en `primary`, icono de 40 en `onPrimary`,
-///   `primaryPressed` al pulsar; con [isLoading], spinner en lugar del icono.
+///   `primaryPressed` al pulsar; con [isLoading], spinner en lugar del icono
+///   (sigue respondiendo al toque).
 ///   El cambio play ↔ pausa es un fundido con escala (§18).
 /// - Aleatorio y repetir activos: icono en `primary` sobre un círculo
 ///   `primaryContainer` (forma **y** color); "repetir una" usa además su
@@ -137,15 +138,15 @@ class TakiPlayPauseButton extends StatelessWidget {
     return Semantics(
       container: true,
       button: true,
-      enabled: onPressed != null && !isLoading,
+      enabled: onPressed != null,
       label: label,
       value: isLoading ? TakiPlaybackControls.loadingValue : null,
       child: Tooltip(
         message: label,
         excludeFromSemantics: true,
         child: TakiPressable(
-          // Mientras carga no se puede pulsar (evita toques repetidos).
-          onPressed: isLoading ? null : onPressed,
+          // Mientras carga sigue respondiendo: se puede pausar sin esperar.
+          onPressed: onPressed,
           builder: (context, states) {
             final disabled = onPressed == null;
             final background = disabled

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -8,6 +11,8 @@ import 'package:taki/core/theme/taki_colors.dart';
 import 'package:taki/core/theme/taki_icon_size.dart';
 import 'package:taki/core/theme/taki_typography.dart';
 import 'package:taki/core/widgets/taki_artwork.dart';
+import 'package:taki/core/widgets/taki_playback_controls.dart';
+import 'package:taki/core/widgets/taki_progress_bar.dart';
 import 'package:taki/features/library/presentation/providers/favorites_providers.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
@@ -202,19 +207,42 @@ void main() {
     }
   });
 
-  testWidgets('aleatorio activo: color **e** icono _on (§6.2)',
+  /// Estado que reciben los controles reutilizables.
+  TakiPlaybackControls controls(WidgetTester tester) =>
+      tester.widget<TakiPlaybackControls>(find.byType(TakiPlaybackControls));
+
+  /// Color del círculo detrás del icono de aleatorio o repetir (null si no hay).
+  Color? toggleCircle(WidgetTester tester, String tooltip) {
+    final container = tester.widget<AnimatedContainer>(find.descendant(
+      of: find.byTooltip(tooltip),
+      matching: find.byType(AnimatedContainer),
+    ));
+    final color = (container.decoration! as ShapeDecoration).color;
+    return color == Colors.transparent ? null : color;
+  }
+
+  testWidgets('aleatorio: activa el del reproductor y se marca con círculo',
       (tester) async {
     await openNowPlaying(tester);
     final accent = accentOf(tester);
 
     expect(iconColor(tester, Icons.shuffle_rounded), AppColors.textSecondary);
+    expect(toggleCircle(tester, 'Aleatorio'), isNull);
 
     await tester.tap(find.byTooltip('Aleatorio'));
     await tester.pumpAndSettle();
 
     expect(player.calls, contains('setShuffle(true)'));
-    expect(find.byIcon(Icons.shuffle_rounded), findsNothing);
-    expect(iconColor(tester, Icons.shuffle_on_rounded), accent);
+    expect(controls(tester).isShuffleEnabled, isTrue);
+    expect(iconColor(tester, Icons.shuffle_rounded), accent);
+    expect(toggleCircle(tester, 'Aleatorio'), TakiColors.primaryContainer);
+    expect(find.byIcon(Icons.shuffle_on_rounded), findsNothing);
+
+    await tester.tap(find.byTooltip('Aleatorio'));
+    await tester.pumpAndSettle();
+    expect(player.calls, contains('setShuffle(false)'));
+    expect(controls(tester).isShuffleEnabled, isFalse);
+    expect(toggleCircle(tester, 'Aleatorio'), isNull);
   });
 
   testWidgets('repetir recorre off → all → one → off con su ícono',
@@ -222,35 +250,90 @@ void main() {
     await openNowPlaying(tester);
     final accent = accentOf(tester);
 
+    expect(controls(tester).repeatMode, TakiRepeatMode.off);
     expect(iconColor(tester, Icons.repeat_rounded), AppColors.textSecondary);
+    expect(toggleCircle(tester, 'Repetir'), isNull);
 
     await tester.tap(find.byTooltip('Repetir'));
     await tester.pumpAndSettle();
+    expect(player.calls.last, 'setRepeatMode(all)');
+    expect(controls(tester).repeatMode, TakiRepeatMode.all);
+    expect(iconColor(tester, Icons.repeat_rounded), accent);
+    expect(toggleCircle(tester, 'Repetir'), TakiColors.primaryContainer);
+
+    await tester.tap(find.byTooltip('Repetir'));
+    await tester.pumpAndSettle();
+    expect(player.calls.last, 'setRepeatMode(one)');
+    expect(controls(tester).repeatMode, TakiRepeatMode.one);
     expect(find.byIcon(Icons.repeat_rounded), findsNothing);
-    expect(iconColor(tester, Icons.repeat_on_rounded), accent);
+    expect(iconColor(tester, Icons.repeat_one_rounded), accent);
+    expect(toggleCircle(tester, 'Repetir'), TakiColors.primaryContainer);
 
     await tester.tap(find.byTooltip('Repetir'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.repeat_on_rounded), findsNothing);
-    expect(iconColor(tester, Icons.repeat_one_on_rounded), accent);
-
-    await tester.tap(find.byTooltip('Repetir'));
-    await tester.pumpAndSettle();
+    expect(player.calls.last, 'setRepeatMode(off)');
+    expect(controls(tester).repeatMode, TakiRepeatMode.off);
     expect(iconColor(tester, Icons.repeat_rounded), AppColors.textSecondary);
+    expect(toggleCircle(tester, 'Repetir'), isNull);
   });
 
-  testWidgets('muestra un indicador de carga si está en buffering',
+  testWidgets('el modo de repetición del reproductor llega a los controles',
       (tester) async {
     await openNowPlaying(tester);
+    for (final (mode, expected) in [
+      (RepeatMode.off, TakiRepeatMode.off),
+      (RepeatMode.all, TakiRepeatMode.all),
+      (RepeatMode.one, TakiRepeatMode.one),
+    ]) {
+      player.emitState(
+        PlaybackState(queue: [song], currentIndex: 0, repeatMode: mode),
+      );
+      await tester.pumpAndSettle();
+      expect(controls(tester).repeatMode, expected, reason: mode.name);
+    }
+  });
+
+  testWidgets('en buffering: spinner, y play/pausa sigue respondiendo',
+      (tester) async {
+    final toggle = MockTogglePlayPause();
+    when(() => toggle()).thenAnswer((_) async {});
+    await openNowPlaying(
+      tester,
+      overrides: [togglePlayPauseProvider.overrideWithValue(toggle)],
+    );
 
     // El spinner es infinito: pump en vez de pumpAndSettle.
     player.emitState(
-      PlaybackState(queue: [song], currentIndex: 0, isBuffering: true),
+      PlaybackState(
+        queue: [song],
+        currentIndex: 0,
+        isPlaying: true,
+        isBuffering: true,
+      ),
     );
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(controls(tester).isLoading, isTrue);
+    expect(
+      find.descendant(
+        of: find.byType(TakiPlayPauseButton),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    // Como antes: se puede pausar sin esperar a que cargue.
+    await tester.tap(find.byType(TakiPlayPauseButton));
+    await tester.pump();
+    verify(() => toggle()).called(1);
+
+    player.emitState(
+      PlaybackState(queue: [song], currentIndex: 0, isPlaying: true),
+    );
+    await tester.pumpAndSettle();
+    expect(controls(tester).isLoading, isFalse);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets('arrastrar la barra no hace seek hasta soltar', (tester) async {
@@ -275,6 +358,51 @@ void main() {
     final target =
         verify(() => seek(captureAny())).captured.single as Duration;
     expect(target.inMilliseconds, closeTo(100000, 1000));
+  });
+
+  testWidgets('tras soltar, la barra se queda en el destino hasta que el '
+      'seek termina', (tester) async {
+    final pending = Completer<void>();
+    when(() => seek(any())).thenAnswer((_) => pending.future);
+    await openNowPlaying(tester);
+
+    await tester.tap(find.byType(Slider));
+    await tester.pump();
+
+    // El reproductor aún no se ha movido (posición 0), pero la barra
+    // muestra el destino mientras el seek está en curso.
+    verify(() => seek(any())).called(1);
+    expect(find.text('1:40'), findsOneWidget);
+    expect(find.text('0:00'), findsNothing);
+
+    // Al terminar, vuelve a seguir la posición real del reproductor.
+    player.emitPosition(const Duration(minutes: 1, seconds: 41));
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('1:41'), findsOneWidget);
+  });
+
+  testWidgets('seek con TalkBack (acción aumentar) usa el mismo seek',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await openNowPlaying(tester);
+
+    final node = tester.getSemantics(find.byType(Slider));
+    expect(
+      node,
+      isSemantics(
+        label: TakiProgressBar.semanticLabel,
+        value: '0:00 de 3:20',
+        isSlider: true,
+      ),
+    );
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    await tester.pumpAndSettle();
+
+    final target =
+        verify(() => seek(captureAny())).captured.single as Duration;
+    expect(target, greaterThan(Duration.zero));
+    handle.dispose();
   });
 
   testWidgets('la barra muestra la posición actual', (tester) async {
@@ -344,6 +472,18 @@ void main() {
       expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     });
 
+    testWidgets('usa los componentes reutilizables (sin controles legacy)',
+        (tester) async {
+      await openNowPlaying(tester);
+
+      expect(find.byType(TakiPlaybackControls), findsOneWidget);
+      expect(find.byType(TakiProgressBar), findsOneWidget);
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.byType(IconButton), findsNothing);
+      expect(find.byIcon(Icons.shuffle_on_rounded), findsNothing);
+      expect(find.byIcon(Icons.repeat_on_rounded), findsNothing);
+    });
+
     testWidgets('los controles llaman a las acciones existentes',
         (tester) async {
       final toggle = MockTogglePlayPause();
@@ -354,33 +494,59 @@ void main() {
       );
 
       await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pump();
+      verify(() => toggle()).called(1);
+
       await tester.tap(find.byTooltip('Anterior'));
+      await tester.pump();
+      expect(player.calls.last, 'skipToPrevious');
+
       await tester.tap(find.byTooltip('Siguiente'));
       await tester.pumpAndSettle();
+      expect(player.calls.last, 'skipToNext');
+    });
 
-      verify(() => toggle()).called(1);
-      expect(player.calls, containsAll(['skipToPrevious', 'skipToNext']));
+    testWidgets('play/pausa usa TogglePlayPause real: reproduce y pausa',
+        (tester) async {
+      await openNowPlaying(tester);
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'play');
+      expect(controls(tester).isPlaying, isTrue);
+
+      await tester.tap(find.byTooltip('Pausar'));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'pause');
     });
 
     testWidgets('play/pausa: círculo naranja de 72 con icono de 40',
         (tester) async {
       await openNowPlaying(tester);
-      final button = find.ancestor(
-        of: find.byIcon(Icons.play_arrow_rounded),
-        matching: find.byType(IconButton),
-      );
+      final button = find.byType(TakiPlayPauseButton);
 
       expect(tester.getSize(button), const Size(72, 72));
-      final style = tester.widget<IconButton>(button).style!;
-      expect(style.backgroundColor!.resolve({}), TakiColors.primary);
+      final circle = tester.widget<Container>(
+        find.descendant(of: button, matching: find.byType(Container)),
+      );
       expect(
-        style.backgroundColor!.resolve({WidgetState.pressed}),
+        (circle.decoration! as ShapeDecoration).color,
+        TakiColors.primary,
+      );
+      final icon = tester.widget<Icon>(find.byIcon(Icons.play_arrow_rounded));
+      expect(icon.size, TakiIconSize.hero.value);
+      expect(icon.color, TakiColors.onPrimary);
+
+      final gesture = await tester.startGesture(tester.getCenter(button));
+      await tester.pump(const Duration(milliseconds: 100));
+      final pressed = tester.widget<Container>(
+        find.descendant(of: button, matching: find.byType(Container)),
+      );
+      expect(
+        (pressed.decoration! as ShapeDecoration).color,
         TakiColors.primaryPressed,
       );
-      expect(
-        tester.widget<IconButton>(button).iconSize,
-        TakiIconSize.hero.value,
-      );
+      await gesture.up();
     });
 
     testWidgets('el naranja solo marca acción y estado', (tester) async {
@@ -457,8 +623,8 @@ void main() {
         isSemantics(hasToggledState: true, isToggled: true),
       );
       expect(
-        tester.getSemantics(find.bySemanticsLabel('Repetir, una')),
-        isSemantics(hasToggledState: true, isToggled: true),
+        tester.getSemantics(find.bySemanticsLabel('Repetir')),
+        isSemantics(hasToggledState: true, isToggled: true, value: 'una'),
       );
       expect(
         tester.getSemantics(find.bySemanticsLabel('Cerrar')),

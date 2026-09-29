@@ -88,22 +88,27 @@ void main() {
       await gesture.up();
     });
 
-    testWidgets('cargando: spinner, no se puede pulsar, "Cargando"',
+    testWidgets('cargando: spinner y "Cargando", pero sigue respondiendo',
         (tester) async {
       final calls = <String>[];
       final handle = tester.ensureSemantics();
-      await pumpInScreen(tester, _controls(isLoading: true, calls: calls));
+      await pumpInScreen(
+        tester,
+        _controls(isPlaying: true, isLoading: true, calls: calls),
+      );
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      await tester.tap(find.byType(TakiPlayPauseButton), warnIfMissed: false);
-      expect(calls, isEmpty);
+      // Se puede pausar sin esperar a que termine de cargar.
+      await tester.tap(find.byType(TakiPlayPauseButton));
+      expect(calls, ['playPause']);
       expect(
         tester.getSemantics(find.byType(TakiPlayPauseButton)),
         isSemantics(
-          label: TakiPlaybackControls.playLabel,
+          label: TakiPlaybackControls.pauseLabel,
           value: TakiPlaybackControls.loadingValue,
-          isEnabled: false,
+          isEnabled: true,
+          hasTapAction: true,
         ),
       );
       handle.dispose();

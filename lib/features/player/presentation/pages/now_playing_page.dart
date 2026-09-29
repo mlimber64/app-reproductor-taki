@@ -9,13 +9,13 @@ import '../../../../core/artwork/artwork_providers.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_icon_size.dart';
-import '../../../../core/theme/taki_motion.dart';
 import '../../../../core/theme/taki_spacing.dart';
 import '../../../../core/theme/taki_typography.dart';
-import '../../../../core/utils/duration_format.dart';
 import '../../../../core/widgets/taki_artwork.dart';
 import '../../../../core/widgets/taki_button.dart';
 import '../../../../core/widgets/taki_icon_button.dart';
+import '../../../../core/widgets/taki_playback_controls.dart';
+import '../../../../core/widgets/taki_progress_bar.dart';
 import '../../../library/presentation/providers/favorites_providers.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
@@ -494,11 +494,9 @@ class _FavoriteButton extends ConsumerWidget {
   }
 }
 
-/// Barra de progreso arrastrable. Durante el arrastre muestra la posición del
-/// dedo; el seek se hace solo al soltar.
-///
-/// §11: pista de 4 px (`divider` → `primary`), pulgar de 16 en `textPrimary`
-/// que crece a 20 al arrastrar; tiempos en `caption` tabular.
+/// Conecta [TakiProgressBar] con el reproductor. El seek se hace solo al
+/// soltar; hasta que termina, la barra se queda en el punto elegido (no
+/// vuelve un instante a la posición anterior).
 class _SeekBar extends ConsumerStatefulWidget {
   const _SeekBar();
 
@@ -507,19 +505,13 @@ class _SeekBar extends ConsumerStatefulWidget {
 }
 
 class _SeekBarState extends ConsumerState<_SeekBar> {
-  static const double _trackHeight = 4;
-  static const double _thumbRadius = 8;
-  static const double _draggingThumbRadius = 10;
+  /// Destino del seek en curso.
+  Duration? _pendingSeek;
 
-  /// Alto de la zona arrastrable (área táctil, §19).
-  static const double _touchHeight = 48;
-
-  double? _dragMs;
-
-  Future<void> _commit(double valueMs) async {
-    setState(() => _dragMs = valueMs);
-    await ref.read(seekProvider).call(Duration(milliseconds: valueMs.round()));
-    if (mounted) setState(() => _dragMs = null);
+  Future<void> _commit(Duration target) async {
+    setState(() => _pendingSeek = target);
+    await ref.read(seekProvider).call(target);
+    if (mounted) setState(() => _pendingSeek = null);
   }
 
   @override
@@ -534,197 +526,41 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
         ) ??
         Duration.zero;
 
-    final maxMs = math.max(duration.inMilliseconds, 1).toDouble();
-    final valueMs = (_dragMs ?? position.inMilliseconds.toDouble()).clamp(
-      0.0,
-      maxMs,
-    );
-    final labelStyle = TakiTypography.caption.copyWith(
-      color: TakiColors.textSecondary,
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: _touchHeight,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: _trackHeight,
-              activeTrackColor: TakiColors.primary,
-              inactiveTrackColor: TakiColors.divider,
-              thumbColor: TakiColors.textPrimary,
-              overlayColor: TakiColors.pressedOverlay,
-              trackShape: const RoundedRectSliderTrackShape(),
-              thumbShape: RoundSliderThumbShape(
-                enabledThumbRadius: _dragMs == null
-                    ? _thumbRadius
-                    : _draggingThumbRadius,
-                elevation: 0,
-                pressedElevation: 0,
-              ),
-              overlayShape: const RoundSliderOverlayShape(
-                overlayRadius: _touchHeight / 2,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: _thumbRadius),
-            ),
-            child: Slider(
-              value: valueMs,
-              max: maxMs,
-              semanticFormatterCallback: (value) =>
-                  formatTrackDuration(Duration(milliseconds: value.round())),
-              onChangeStart: (value) => setState(() => _dragMs = value),
-              onChanged: (value) => setState(() => _dragMs = value),
-              onChangeEnd: _commit,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _thumbRadius),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                formatTrackDuration(Duration(milliseconds: valueMs.round())),
-                style: labelStyle,
-              ),
-              Text(formatTrackDuration(duration), style: labelStyle),
-            ],
-          ),
-        ),
-      ],
+    return TakiProgressBar(
+      position: _pendingSeek ?? position,
+      duration: duration,
+      onSeek: _commit,
     );
   }
 }
 
-/// Controles de transporte (§11): aleatorio · anterior · play/pausa ·
-/// siguiente · repetir. Aleatorio y repetir activos cambian de icono (`_on`)
-/// además de color.
+/// Traduce el modo de repetición del reproductor al de los controles.
+TakiRepeatMode _takiRepeatMode(RepeatMode mode) => switch (mode) {
+  RepeatMode.off => TakiRepeatMode.off,
+  RepeatMode.all => TakiRepeatMode.all,
+  RepeatMode.one => TakiRepeatMode.one,
+};
+
+/// Conecta [TakiPlaybackControls] con el estado y las acciones del
+/// reproductor.
 class _Controls extends ConsumerWidget {
   const _Controls();
-
-  static String _repeatValue(RepeatMode mode) => switch (mode) {
-    RepeatMode.off => 'desactivado',
-    RepeatMode.all => 'todas',
-    RepeatMode.one => 'una',
-  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state =
         ref.watch(playbackStateProvider).valueOrNull ?? PlaybackState.empty;
-    final repeat = state.repeatMode;
 
-    return SizedBox(
-      height: _PlayPauseButton.size,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          TakiIconButton(
-            icon: Icons.shuffle_rounded,
-            selectedIcon: Icons.shuffle_on_rounded,
-            semanticLabel: 'Aleatorio',
-            selected: state.shuffleEnabled,
-            variant: TakiIconButtonVariant.subtle,
-            onPressed: () => ref.read(toggleShuffleProvider).call(),
-          ),
-          TakiIconButton(
-            icon: Icons.skip_previous_rounded,
-            semanticLabel: 'Anterior',
-            iconSize: TakiIconSize.xl,
-            onPressed: () => ref.read(skipPreviousProvider).call(),
-          ),
-          _PlayPauseButton(
-            isPlaying: state.isPlaying,
-            isBuffering: state.isBuffering,
-            onPressed: () => ref.read(togglePlayPauseProvider).call(),
-          ),
-          TakiIconButton(
-            icon: Icons.skip_next_rounded,
-            semanticLabel: 'Siguiente',
-            iconSize: TakiIconSize.xl,
-            onPressed: () => ref.read(skipNextProvider).call(),
-          ),
-          TakiIconButton(
-            icon: Icons.repeat_rounded,
-            selectedIcon: repeat == RepeatMode.one
-                ? Icons.repeat_one_on_rounded
-                : Icons.repeat_on_rounded,
-            // El modo va en la etiqueta: TakiIconButton no tiene valor
-            // semántico propio.
-            semanticLabel: 'Repetir, ${_repeatValue(repeat)}',
-            tooltip: 'Repetir',
-            selected: repeat != RepeatMode.off,
-            variant: TakiIconButtonVariant.subtle,
-            onPressed: () => ref.read(cycleRepeatModeProvider).call(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Play/pausa de Reproduciendo (§11): círculo de 72 en `primary`, icono de 40
-/// en `onPrimary`, `primaryPressed` al pulsar y spinner mientras carga.
-///
-/// Queda fuera de `TakiIconButton` (su contenedor mide 40 y no es naranja):
-/// es el hueco que cubrirá `TakiPlaybackControls`.
-class _PlayPauseButton extends StatelessWidget {
-  const _PlayPauseButton({
-    required this.isPlaying,
-    required this.isBuffering,
-    required this.onPressed,
-  });
-
-  static const double size = 72;
-  static const double _spinnerStroke = 3;
-
-  final bool isPlaying;
-  final bool isBuffering;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final iconSize = TakiIconSize.hero.value;
-
-    return IconButton(
-      tooltip: isPlaying ? 'Pausar' : 'Reproducir',
-      onPressed: onPressed,
-      style: ButtonStyle(
-        fixedSize: const WidgetStatePropertyAll(Size.square(size)),
-        minimumSize: const WidgetStatePropertyAll(Size.square(size)),
-        shape: const WidgetStatePropertyAll(CircleBorder()),
-        backgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.pressed)
-              ? TakiColors.primaryPressed
-              : TakiColors.primary,
-        ),
-        foregroundColor: const WidgetStatePropertyAll(TakiColors.onPrimary),
-        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-      ),
-      iconSize: iconSize,
-      icon: AnimatedSwitcher(
-        duration: TakiMotion.short,
-        switchInCurve: TakiMotion.change,
-        switchOutCurve: TakiMotion.change,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(scale: animation, child: child),
-        ),
-        child: isBuffering
-            ? SizedBox.square(
-                key: const ValueKey('buffering'),
-                dimension: iconSize,
-                child: const CircularProgressIndicator(
-                  strokeWidth: _spinnerStroke,
-                  color: TakiColors.onPrimary,
-                ),
-              )
-            : Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                key: ValueKey(isPlaying),
-              ),
-      ),
+    return TakiPlaybackControls(
+      isPlaying: state.isPlaying,
+      isLoading: state.isBuffering,
+      isShuffleEnabled: state.shuffleEnabled,
+      repeatMode: _takiRepeatMode(state.repeatMode),
+      onPlayPause: () => ref.read(togglePlayPauseProvider).call(),
+      onPrevious: () => ref.read(skipPreviousProvider).call(),
+      onNext: () => ref.read(skipNextProvider).call(),
+      onShuffle: () => ref.read(toggleShuffleProvider).call(),
+      onRepeat: () => ref.read(cycleRepeatModeProvider).call(),
     );
   }
 }

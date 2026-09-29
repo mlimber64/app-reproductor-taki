@@ -816,7 +816,7 @@ componente (no cambian su color de fondo).
 | `TakiPlaylistCard` | Capa + 0.98 | Anillo + marca; sonando: barras | 38 % | — |
 | Botones de icono | Capa circular | `primary` + variante de icono | 38 % | Spinner |
 | Navegación | Capa sobre el indicador | Indicador + relleno + etiqueta 600 | — | — |
-| Controles de reproducción | Capa circular; play: `primaryPressed` | Aleatorio y repetir: `primary` sobre círculo `primaryContainer` | 38 % sin canción | Play: spinner en lugar del icono mientras carga (actual) |
+| Controles de reproducción | Capa circular; play: `primaryPressed` | Aleatorio y repetir: `primary` sobre círculo `primaryContainer` | 38 % sin canción | Play: spinner en lugar del icono mientras carga; sigue respondiendo (se puede pausar) |
 
 ---
 
@@ -1041,8 +1041,8 @@ filas vecinas no lo tapen), con las medidas
 
 | Componente | Ubicación | Parte de |
 |---|---|---|
-| `TakiPlaybackControls` · **implementado (1.6B)** | `core/widgets/` (presentacional: estado y callbacks desde fuera) | `_Controls` y `_PlayPauseButton` (Reproduciendo) |
-| `TakiProgressBar` · **implementado (1.6B)** | `core/widgets/` (recibe posición y duración) | `_SeekBar` (Reproduciendo). La barra de 2 px del mini player no lo usa: es decorativa y no se arrastra |
+| `TakiPlaybackControls` · **implementado (1.6B), en Reproduciendo (1.6C)** | `core/widgets/` (presentacional: estado y callbacks desde fuera) | `_Controls` y `_PlayPauseButton` (Reproduciendo) |
+| `TakiProgressBar` · **implementado (1.6B), en Reproduciendo (1.6C)** | `core/widgets/` (recibe posición y duración) | `_SeekBar` (Reproduciendo). La barra de 2 px del mini player no lo usa: es decorativa y no se arrastra |
 | `TakiQueueItem` | `features/player/presentation/widgets/` | `_QueueRow` y `_NowPlayingCard` (Cola); puede componer `TakiSongTile` |
 
 ---
@@ -1117,7 +1117,9 @@ todavía sin usar en ninguna pantalla.
   `onPlayPause`, `onPrevious`, `onNext`, `onShuffle`, `onRepeat` (`null` =
   deshabilitado). Incluye `TakiPlayPauseButton` (círculo de 72, icono de 40,
   `primaryPressed`, spinner y "Cargando" mientras carga, fundido con escala
-  de §18).
+  de §18). Mientras carga **sigue respondiendo** al toque (se puede pausar
+  sin esperar; ajustado en 1.6C para conservar el comportamiento de
+  Reproduciendo).
 - `TakiProgressBar`: `position`, `duration`, `onSeek`, `enabled`. Normaliza
   valores fuera de rango; con duración 0 o sin `onSeek` no se mueve. El seek
   se avisa al soltar (también desde TalkBack). Se anuncia como "Progreso de
@@ -1129,6 +1131,15 @@ todavía sin usar en ninguna pantalla.
 - **Siguen abiertos:** grosor del spinner (se usa el de Flutter, 4; §17 no lo
   fija), y los controles necesitan 264 px de ancho (5 controles): la Cola o
   el mini player, si los usan, necesitarán su propia variante compacta.
+
+**Integración en Reproduciendo (Fase 1.6C):** `_Controls` y `_SeekBar` son
+ahora adaptadores finos sobre `TakiPlaybackControls` y `TakiProgressBar`
+(el `_PlayPauseButton` propio desaparece). Mismas acciones del reproductor;
+`RepeatMode` se traduce a `TakiRepeatMode` en la página (el del reproductor
+no sale de `player`). Mientras el seek está en curso, la página pasa el
+destino como posición para que la barra no vuelva un instante atrás (como
+hacía `_SeekBar`). Resuelve en pantalla los huecos de 1.6A de play/pausa,
+barra, valor semántico de repetir ("Repetir", valor "una") e iconos `_on`.
 
 **Para cada paso:**
 
