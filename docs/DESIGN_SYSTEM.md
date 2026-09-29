@@ -1088,6 +1088,27 @@ verde y una revisión en dispositivo. Nunca se reescribe toda la UI de golpe.
   (`InputDecorationTheme`) ni de slider global; `onErrorContainer` sale del
   esquema por defecto de Material.
 
+**Estado de Reproduciendo (Fase 1.6A):** migrada a tokens y componentes
+Taki (`TakiArtwork` hero, `TakiIconButton` para cerrar, más, favorito,
+aleatorio, repetir, anterior y siguiente; `TakiButton` secundario para
+"Cola"). Aleatorio y repetir activos usan los iconos `_on` de §6.2. La
+carátula sigue saliendo de `ArtworkCache` como `MemoryImage` (no de
+`AlbumArtworkImage`). Huecos:
+
+- **Play/pausa:** círculo de 72 en `primary` que `TakiIconButton` no
+  cubre (su contenedor mide 40 y no es naranja); queda como botón propio de
+  la pantalla hasta `TakiPlaybackControls`. El grosor del spinner (3) no está
+  definido.
+- **Barra de progreso:** sigue siendo el `Slider` de Material con los tokens
+  de §11, a la espera de `TakiProgressBar`.
+- **Origen ("Biblioteca")** bajo el eyebrow: §11 no le asigna rol; conserva
+  su tamaño (14, peso 600) con `body`.
+- **Repetir** no tiene valor semántico propio en `TakiIconButton`: el modo
+  va en la etiqueta ("Repetir, una").
+- **Los iconos `_on`** de Material se dibujan como un cuadrado relleno: en
+  naranja pesan más de lo que sugiere §6.2. Pendiente de revisión visual.
+- La cabecera conserva su alto de 56 (no definido en §11).
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.

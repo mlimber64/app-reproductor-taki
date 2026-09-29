@@ -1,12 +1,21 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/artwork/artwork_cache.dart';
+import '../../../../core/artwork/artwork_providers.dart';
 import '../../../../core/domain/entities/song.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/taki_colors.dart';
+import '../../../../core/theme/taki_icon_size.dart';
+import '../../../../core/theme/taki_motion.dart';
+import '../../../../core/theme/taki_spacing.dart';
+import '../../../../core/theme/taki_typography.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../../core/widgets/artwork_image.dart';
+import '../../../../core/widgets/taki_artwork.dart';
+import '../../../../core/widgets/taki_button.dart';
+import '../../../../core/widgets/taki_icon_button.dart';
 import '../../../library/presentation/providers/favorites_providers.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
@@ -76,35 +85,35 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
     final song = ref.watch(currentSongProvider).valueOrNull;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: TakiColors.background,
       body: GestureDetector(
         onVerticalDragUpdate: _onDragUpdate,
         onVerticalDragEnd: _onDragEnd,
         child: ValueListenableBuilder<double>(
           valueListenable: _dragOffset,
-          builder: (context, offset, child) => Transform.translate(
-            offset: Offset(0, offset),
-            child: child,
-          ),
+          builder: (context, offset, child) =>
+              Transform.translate(offset: Offset(0, offset), child: child),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(
+                horizontal: TakiSpacing.pageGutterImmersive,
+              ),
               child: song == null
                   ? const SizedBox.expand()
                   : LayoutBuilder(
                       builder: (context, constraints) =>
                           constraints.maxWidth > constraints.maxHeight
-                              ? _LandscapeLayout(
-                                  song: song,
-                                  onClose: _close,
-                                  onOpenQueue: widget.onOpenQueue,
-                                )
-                              : _PortraitLayout(
-                                  song: song,
-                                  onClose: _close,
-                                  onOpenQueue: widget.onOpenQueue,
-                                  constraints: constraints,
-                                ),
+                          ? _LandscapeLayout(
+                              song: song,
+                              onClose: _close,
+                              onOpenQueue: widget.onOpenQueue,
+                            )
+                          : _PortraitLayout(
+                              song: song,
+                              onClose: _close,
+                              onOpenQueue: widget.onOpenQueue,
+                              constraints: constraints,
+                            ),
                     ),
             ),
           ),
@@ -133,16 +142,17 @@ class _PortraitLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // §11: 24 entre bloques (carátula, texto, progreso, controles, acciones).
     final bottom = [
-      const SizedBox(height: 24),
+      const SizedBox(height: TakiSpacing.xl),
       _SongInfo(song: song, maxTitleLines: 2),
-      const SizedBox(height: 16),
+      const SizedBox(height: TakiSpacing.xl),
       const _SeekBar(),
-      const SizedBox(height: 8),
+      const SizedBox(height: TakiSpacing.xl),
       const _Controls(),
-      const SizedBox(height: 16),
+      const SizedBox(height: TakiSpacing.xl),
       _BottomActions(onOpenQueue: onOpenQueue),
-      const SizedBox(height: 16),
+      const SizedBox(height: TakiSpacing.lg),
     ];
 
     if (constraints.maxHeight < _minHeightWithoutScroll) {
@@ -150,7 +160,7 @@ class _PortraitLayout extends StatelessWidget {
         child: Column(
           children: [
             _TopBar(onClose: onClose),
-            const SizedBox(height: 16),
+            const SizedBox(height: TakiSpacing.lg),
             _Artwork(
               albumId: song.albumId,
               size: math.min(constraints.maxWidth, _scrollArtworkSize),
@@ -164,7 +174,7 @@ class _PortraitLayout extends StatelessWidget {
     return Column(
       children: [
         _TopBar(onClose: onClose),
-        const SizedBox(height: 16),
+        const SizedBox(height: TakiSpacing.lg),
         Expanded(
           child: LayoutBuilder(
             builder: (context, box) => Center(
@@ -197,7 +207,7 @@ class _LandscapeLayout extends StatelessWidget {
     return Column(
       children: [
         _TopBar(onClose: onClose),
-        const SizedBox(height: 8),
+        const SizedBox(height: TakiSpacing.sm),
         Expanded(
           child: Row(
             children: [
@@ -212,19 +222,21 @@ class _LandscapeLayout extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 32),
+              const SizedBox(width: TakiSpacing.xxl),
               Expanded(
                 flex: 3,
                 child: LayoutBuilder(
                   builder: (context, box) {
+                    // En horizontal el alto es escaso: separación dentro de
+                    // bloque (8, §11) en lugar de la de 24 entre bloques.
                     final details = Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _SongInfo(song: song, maxTitleLines: 1),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: TakiSpacing.sm),
                         const _SeekBar(),
                         const _Controls(),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: TakiSpacing.sm),
                         _BottomActions(onOpenQueue: onOpenQueue),
                       ],
                     );
@@ -241,13 +253,13 @@ class _LandscapeLayout extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: TakiSpacing.sm),
       ],
     );
   }
 }
 
-/// Fila inferior de accesos. Por ahora solo "Cola".
+/// Fila inferior de accesos. Por ahora solo "Cola" (§11: botón secundario).
 class _BottomActions extends StatelessWidget {
   const _BottomActions({required this.onOpenQueue});
 
@@ -260,19 +272,12 @@ class _BottomActions extends StatelessWidget {
       children: [
         Tooltip(
           message: 'Abrir la cola',
-          child: TextButton.icon(
+          child: TakiButton(
+            label: 'Cola',
+            icon: Icons.queue_music_rounded,
+            variant: TakiButtonVariant.secondary,
+            semanticLabel: 'Abrir la cola',
             onPressed: onOpenQueue,
-            icon: const Icon(Icons.queue_music_rounded, size: 20),
-            label: const Text('Cola'),
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.surface,
-              foregroundColor: AppColors.textPrimary,
-              minimumSize: const Size(0, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              shape: const StadiumBorder(),
-              // Área táctil de 48 aunque la píldora mida 44.
-              tapTargetSize: MaterialTapTargetSize.padded,
-            ),
           ),
         ),
       ],
@@ -283,19 +288,20 @@ class _BottomActions extends StatelessWidget {
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.onClose});
 
+  static const double _height = 56;
+
   final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return SizedBox(
-      height: 56,
+      height: _height,
       child: Row(
         children: [
-          _CircleButton(
+          TakiIconButton(
             icon: Icons.keyboard_arrow_down_rounded,
-            tooltip: 'Cerrar',
+            semanticLabel: 'Cerrar',
+            variant: TakiIconButtonVariant.tonal,
             onPressed: onClose,
           ),
           Expanded(
@@ -306,29 +312,29 @@ class _TopBar extends StatelessWidget {
                   'REPRODUCIENDO DESDE',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    fontSize: 11,
-                    letterSpacing: 1.5,
-                    color: AppColors.textSecondary,
+                  style: TakiTypography.eyebrow.copyWith(
+                    color: TakiColors.textMuted,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: TakiSpacing.xxs),
                 Text(
+                  // Origen fijo (I14): pendiente de conocer el real.
                   'Biblioteca',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodyMedium?.copyWith(
-                    fontSize: 14,
+                  style: TakiTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: TakiColors.textPrimary,
                   ),
                 ),
               ],
             ),
           ),
-          _CircleButton(
+          TakiIconButton(
             icon: Icons.more_horiz_rounded,
-            tooltip: 'Más opciones',
+            semanticLabel: 'Más opciones',
+            variant: TakiIconButtonVariant.tonal,
+            // Sin acciones todavía (I14); se mantiene el comportamiento.
             onPressed: () {},
           ),
         ],
@@ -337,59 +343,75 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon),
-      style: IconButton.styleFrom(
-        backgroundColor: AppColors.surfaceElevated,
-        foregroundColor: AppColors.textPrimary,
-        fixedSize: const Size.square(44),
-        minimumSize: const Size.square(44),
-        tapTargetSize: MaterialTapTargetSize.padded,
-      ),
-    );
-  }
-}
-
-class _Artwork extends StatelessWidget {
+/// Carátula grande (§11): `TakiArtwork` hero, con la misma fuente que el
+/// resto de la app (bytes de [ArtworkCache]).
+class _Artwork extends ConsumerStatefulWidget {
   const _Artwork({required this.albumId, required this.size});
-
-  static const double _radius = 24;
 
   final int? albumId;
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    // Tamaño entero: evita pedir la carátula de nuevo por fracciones de píxel.
-    final side = math.max(0.0, size.floorToDouble());
+  ConsumerState<_Artwork> createState() => _ArtworkState();
+}
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(_radius)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.artworkShadow,
-            blurRadius: 32,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: ArtworkImage(albumId: albumId, size: side, borderRadius: _radius),
+class _ArtworkState extends ConsumerState<_Artwork> {
+  ArtworkKey? _key;
+  Uint8List? _bytes;
+
+  /// Tamaño entero: evita pedir la carátula de nuevo por fracciones de píxel.
+  double get _side => math.max(0.0, widget.size.floorToDouble());
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_Artwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.albumId != widget.albumId || oldWidget.size != widget.size) {
+      _resolve();
+    }
+  }
+
+  void _resolve() {
+    final albumId = widget.albumId;
+    if (albumId == null) {
+      _key = null;
+      _bytes = null;
+      return;
+    }
+
+    final key = (
+      albumId: albumId,
+      size: (_side * MediaQuery.devicePixelRatioOf(context)).round(),
+    );
+    if (key == _key) return;
+    _key = key;
+
+    final cache = ref.read(artworkCacheProvider);
+    if (cache.contains(key)) {
+      _bytes = cache.peek(key);
+      return;
+    }
+
+    _bytes = null;
+    cache.load(key).then((bytes) {
+      if (mounted && _key == key) setState(() => _bytes = bytes);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    return TakiArtwork(
+      size: _side,
+      hero: true,
+      // Los bytes son la clave del MemoryImage: tras un reescaneo llegan
+      // bytes nuevos y la imagen se actualiza.
+      image: bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
     );
   }
 }
@@ -402,8 +424,6 @@ class _SongInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return Row(
       children: [
         Expanded(
@@ -414,26 +434,23 @@ class _SongInfo extends StatelessWidget {
                 song.title,
                 maxLines: maxTitleLines,
                 overflow: TextOverflow.ellipsis,
-                style: textTheme.headlineSmall?.copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                style: TakiTypography.headline.copyWith(
+                  color: TakiColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: TakiSpacing.xxs),
               Text(
                 song.artist ?? 'Artista desconocido',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: textTheme.bodyLarge?.copyWith(
-                  fontSize: 15,
-                  color: AppColors.textSecondary,
+                style: TakiTypography.bodyLarge.copyWith(
+                  color: TakiColors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: TakiSpacing.sm),
         _FavoriteButton(song: song),
       ],
     );
@@ -463,28 +480,25 @@ class _FavoriteButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isFavorite = ref.watch(isFavoriteProvider(song.id));
-    final label = isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos';
 
-    return Semantics(
-      toggled: isFavorite,
-      child: IconButton(
-        tooltip: label,
-        onPressed: () => _toggle(context, ref),
-        iconSize: 28,
-        style: IconButton.styleFrom(minimumSize: const Size.square(48)),
-        icon: Icon(
-          isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          color: isFavorite
-              ? Theme.of(context).colorScheme.primary
-              : AppColors.textSecondary,
-        ),
-      ),
+    // Marcado: corazón relleno **y** naranja; se anuncia como interruptor.
+    return TakiIconButton(
+      icon: Icons.favorite_border_rounded,
+      selectedIcon: Icons.favorite_rounded,
+      semanticLabel: isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos',
+      selected: isFavorite,
+      variant: TakiIconButtonVariant.subtle,
+      iconSize: TakiIconSize.lg,
+      onPressed: () => _toggle(context, ref),
     );
   }
 }
 
 /// Barra de progreso arrastrable. Durante el arrastre muestra la posición del
 /// dedo; el seek se hace solo al soltar.
+///
+/// §11: pista de 4 px (`divider` → `primary`), pulgar de 16 en `textPrimary`
+/// que crece a 20 al arrastrar; tiempos en `caption` tabular.
 class _SeekBar extends ConsumerStatefulWidget {
   const _SeekBar();
 
@@ -493,7 +507,12 @@ class _SeekBar extends ConsumerStatefulWidget {
 }
 
 class _SeekBarState extends ConsumerState<_SeekBar> {
+  static const double _trackHeight = 4;
   static const double _thumbRadius = 8;
+  static const double _draggingThumbRadius = 10;
+
+  /// Alto de la zona arrastrable (área táctil, §19).
+  static const double _touchHeight = 48;
 
   double? _dragMs;
 
@@ -505,10 +524,9 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accent = theme.colorScheme.primary;
     final position = ref.watch(positionProvider).valueOrNull ?? Duration.zero;
-    final duration = ref.watch(
+    final duration =
+        ref.watch(
           playbackStateProvider.select((state) => state.valueOrNull?.duration),
         ) ??
         ref.watch(
@@ -517,33 +535,37 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
         Duration.zero;
 
     final maxMs = math.max(duration.inMilliseconds, 1).toDouble();
-    final valueMs =
-        (_dragMs ?? position.inMilliseconds.toDouble()).clamp(0.0, maxMs);
-    final labelStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12,
-      color: AppColors.textSecondary,
-      fontFeatures: const [FontFeature.tabularFigures()],
+    final valueMs = (_dragMs ?? position.inMilliseconds.toDouble()).clamp(
+      0.0,
+      maxMs,
+    );
+    final labelStyle = TakiTypography.caption.copyWith(
+      color: TakiColors.textSecondary,
     );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 48,
+          height: _touchHeight,
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              activeTrackColor: accent,
-              inactiveTrackColor: AppColors.seekTrack,
-              thumbColor: AppColors.textPrimary,
-              overlayColor: accent.withValues(alpha: 0.12),
+              trackHeight: _trackHeight,
+              activeTrackColor: TakiColors.primary,
+              inactiveTrackColor: TakiColors.divider,
+              thumbColor: TakiColors.textPrimary,
+              overlayColor: TakiColors.pressedOverlay,
               trackShape: const RoundedRectSliderTrackShape(),
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: _thumbRadius,
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: _dragMs == null
+                    ? _thumbRadius
+                    : _draggingThumbRadius,
                 elevation: 0,
                 pressedElevation: 0,
               ),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
+              overlayShape: const RoundSliderOverlayShape(
+                overlayRadius: _touchHeight / 2,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: _thumbRadius),
             ),
             child: Slider(
@@ -575,38 +597,41 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
   }
 }
 
+/// Controles de transporte (§11): aleatorio · anterior · play/pausa ·
+/// siguiente · repetir. Aleatorio y repetir activos cambian de icono (`_on`)
+/// además de color.
 class _Controls extends ConsumerWidget {
   const _Controls();
+
+  static String _repeatValue(RepeatMode mode) => switch (mode) {
+    RepeatMode.off => 'desactivado',
+    RepeatMode.all => 'todas',
+    RepeatMode.one => 'una',
+  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state =
         ref.watch(playbackStateProvider).valueOrNull ?? PlaybackState.empty;
-    final accent = Theme.of(context).colorScheme.primary;
-
-    Color toggleColor(bool active) =>
-        active ? accent : AppColors.textSecondary;
+    final repeat = state.repeatMode;
 
     return SizedBox(
-      height: 76,
+      height: _PlayPauseButton.size,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Semantics(
-            toggled: state.shuffleEnabled,
-            child: _ControlButton(
-              size: 44,
-              icon: Icons.shuffle_rounded,
-              color: toggleColor(state.shuffleEnabled),
-              tooltip: 'Aleatorio',
-              onPressed: () => ref.read(toggleShuffleProvider).call(),
-            ),
+          TakiIconButton(
+            icon: Icons.shuffle_rounded,
+            selectedIcon: Icons.shuffle_on_rounded,
+            semanticLabel: 'Aleatorio',
+            selected: state.shuffleEnabled,
+            variant: TakiIconButtonVariant.subtle,
+            onPressed: () => ref.read(toggleShuffleProvider).call(),
           ),
-          _ControlButton(
-            size: 56,
+          TakiIconButton(
             icon: Icons.skip_previous_rounded,
-            color: AppColors.textPrimary,
-            tooltip: 'Anterior',
+            semanticLabel: 'Anterior',
+            iconSize: TakiIconSize.xl,
             onPressed: () => ref.read(skipPreviousProvider).call(),
           ),
           _PlayPauseButton(
@@ -614,28 +639,24 @@ class _Controls extends ConsumerWidget {
             isBuffering: state.isBuffering,
             onPressed: () => ref.read(togglePlayPauseProvider).call(),
           ),
-          _ControlButton(
-            size: 56,
+          TakiIconButton(
             icon: Icons.skip_next_rounded,
-            color: AppColors.textPrimary,
-            tooltip: 'Siguiente',
+            semanticLabel: 'Siguiente',
+            iconSize: TakiIconSize.xl,
             onPressed: () => ref.read(skipNextProvider).call(),
           ),
-          Semantics(
-            value: switch (state.repeatMode) {
-              RepeatMode.off => 'desactivado',
-              RepeatMode.all => 'todas',
-              RepeatMode.one => 'una',
-            },
-            child: _ControlButton(
-              size: 44,
-              icon: state.repeatMode == RepeatMode.one
-                  ? Icons.repeat_one_rounded
-                  : Icons.repeat_rounded,
-              color: toggleColor(state.repeatMode != RepeatMode.off),
-              tooltip: 'Repetir',
-              onPressed: () => ref.read(cycleRepeatModeProvider).call(),
-            ),
+          TakiIconButton(
+            icon: Icons.repeat_rounded,
+            selectedIcon: repeat == RepeatMode.one
+                ? Icons.repeat_one_on_rounded
+                : Icons.repeat_on_rounded,
+            // El modo va en la etiqueta: TakiIconButton no tiene valor
+            // semántico propio.
+            semanticLabel: 'Repetir, ${_repeatValue(repeat)}',
+            tooltip: 'Repetir',
+            selected: repeat != RepeatMode.off,
+            variant: TakiIconButtonVariant.subtle,
+            onPressed: () => ref.read(cycleRepeatModeProvider).call(),
           ),
         ],
       ),
@@ -643,37 +664,11 @@ class _Controls extends ConsumerWidget {
   }
 }
 
-class _ControlButton extends StatelessWidget {
-  const _ControlButton({
-    required this.size,
-    required this.icon,
-    required this.color,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final double size;
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      iconSize: size * 0.6,
-      icon: Icon(icon, color: color),
-      style: IconButton.styleFrom(
-        fixedSize: Size.square(size),
-        minimumSize: Size.square(size),
-        tapTargetSize: MaterialTapTargetSize.padded,
-      ),
-    );
-  }
-}
-
+/// Play/pausa de Reproduciendo (§11): círculo de 72 en `primary`, icono de 40
+/// en `onPrimary`, `primaryPressed` al pulsar y spinner mientras carga.
+///
+/// Queda fuera de `TakiIconButton` (su contenedor mide 40 y no es naranja):
+/// es el hueco que cubrirá `TakiPlaybackControls`.
 class _PlayPauseButton extends StatelessWidget {
   const _PlayPauseButton({
     required this.isPlaying,
@@ -681,7 +676,8 @@ class _PlayPauseButton extends StatelessWidget {
     required this.onPressed,
   });
 
-  static const double _size = 76;
+  static const double size = 72;
+  static const double _spinnerStroke = 3;
 
   final bool isPlaying;
   final bool isBuffering;
@@ -689,27 +685,46 @@ class _PlayPauseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
+    final iconSize = TakiIconSize.hero.value;
 
     return IconButton(
       tooltip: isPlaying ? 'Pausar' : 'Reproducir',
       onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: accent,
-        foregroundColor: AppColors.onAccent,
-        fixedSize: const Size.square(_size),
-        minimumSize: const Size.square(_size),
+      style: ButtonStyle(
+        fixedSize: const WidgetStatePropertyAll(Size.square(size)),
+        minimumSize: const WidgetStatePropertyAll(Size.square(size)),
+        shape: const WidgetStatePropertyAll(CircleBorder()),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.pressed)
+              ? TakiColors.primaryPressed
+              : TakiColors.primary,
+        ),
+        foregroundColor: const WidgetStatePropertyAll(TakiColors.onPrimary),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       ),
-      iconSize: 40,
-      icon: isBuffering
-          ? const SizedBox.square(
-              dimension: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: AppColors.onAccent,
+      iconSize: iconSize,
+      icon: AnimatedSwitcher(
+        duration: TakiMotion.short,
+        switchInCurve: TakiMotion.change,
+        switchOutCurve: TakiMotion.change,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: animation, child: child),
+        ),
+        child: isBuffering
+            ? SizedBox.square(
+                key: const ValueKey('buffering'),
+                dimension: iconSize,
+                child: const CircularProgressIndicator(
+                  strokeWidth: _spinnerStroke,
+                  color: TakiColors.onPrimary,
+                ),
+              )
+            : Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                key: ValueKey(isPlaying),
               ),
-            )
-          : Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+      ),
     );
   }
 }

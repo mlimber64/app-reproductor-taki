@@ -4,6 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/core/theme/app_colors.dart';
 import 'package:taki/app/theme/app_theme.dart';
+import 'package:taki/core/theme/taki_colors.dart';
+import 'package:taki/core/theme/taki_icon_size.dart';
+import 'package:taki/core/theme/taki_typography.dart';
+import 'package:taki/core/widgets/taki_artwork.dart';
 import 'package:taki/features/library/presentation/providers/favorites_providers.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
@@ -198,7 +202,8 @@ void main() {
     }
   });
 
-  testWidgets('aleatorio cambia de color al activarse', (tester) async {
+  testWidgets('aleatorio activo: color **e** icono _on (§6.2)',
+      (tester) async {
     await openNowPlaying(tester);
     final accent = accentOf(tester);
 
@@ -208,7 +213,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(player.calls, contains('setShuffle(true)'));
-    expect(iconColor(tester, Icons.shuffle_rounded), accent);
+    expect(find.byIcon(Icons.shuffle_rounded), findsNothing);
+    expect(iconColor(tester, Icons.shuffle_on_rounded), accent);
   });
 
   testWidgets('repetir recorre off → all → one → off con su ícono',
@@ -220,12 +226,13 @@ void main() {
 
     await tester.tap(find.byTooltip('Repetir'));
     await tester.pumpAndSettle();
-    expect(iconColor(tester, Icons.repeat_rounded), accent);
+    expect(find.byIcon(Icons.repeat_rounded), findsNothing);
+    expect(iconColor(tester, Icons.repeat_on_rounded), accent);
 
     await tester.tap(find.byTooltip('Repetir'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.repeat_rounded), findsNothing);
-    expect(iconColor(tester, Icons.repeat_one_rounded), accent);
+    expect(find.byIcon(Icons.repeat_on_rounded), findsNothing);
+    expect(iconColor(tester, Icons.repeat_one_on_rounded), accent);
 
     await tester.tap(find.byTooltip('Repetir'));
     await tester.pumpAndSettle();
@@ -321,8 +328,167 @@ void main() {
     });
   });
 
+  group('Design System (Fase 1.6A)', () {
+    testWidgets('sonando: pausa; en pausa: reproducir (forma, no solo color)',
+        (tester) async {
+      await openNowPlaying(
+        tester,
+        state: PlaybackState(queue: [song], currentIndex: 0, isPlaying: true),
+      );
+      expect(find.byTooltip('Pausar'), findsOneWidget);
+      expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+
+      player.emitState(PlaybackState(queue: [song], currentIndex: 0));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Reproducir'), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    });
+
+    testWidgets('los controles llaman a las acciones existentes',
+        (tester) async {
+      final toggle = MockTogglePlayPause();
+      when(() => toggle()).thenAnswer((_) async {});
+      await openNowPlaying(
+        tester,
+        overrides: [togglePlayPauseProvider.overrideWithValue(toggle)],
+      );
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.tap(find.byTooltip('Anterior'));
+      await tester.tap(find.byTooltip('Siguiente'));
+      await tester.pumpAndSettle();
+
+      verify(() => toggle()).called(1);
+      expect(player.calls, containsAll(['skipToPrevious', 'skipToNext']));
+    });
+
+    testWidgets('play/pausa: círculo naranja de 72 con icono de 40',
+        (tester) async {
+      await openNowPlaying(tester);
+      final button = find.ancestor(
+        of: find.byIcon(Icons.play_arrow_rounded),
+        matching: find.byType(IconButton),
+      );
+
+      expect(tester.getSize(button), const Size(72, 72));
+      final style = tester.widget<IconButton>(button).style!;
+      expect(style.backgroundColor!.resolve({}), TakiColors.primary);
+      expect(
+        style.backgroundColor!.resolve({WidgetState.pressed}),
+        TakiColors.primaryPressed,
+      );
+      expect(
+        tester.widget<IconButton>(button).iconSize,
+        TakiIconSize.hero.value,
+      );
+    });
+
+    testWidgets('el naranja solo marca acción y estado', (tester) async {
+      await openNowPlaying(tester);
+
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        TakiColors.background,
+      );
+      // En reposo, aleatorio, repetir y favorito van en gris secundario.
+      for (final icon in [
+        Icons.shuffle_rounded,
+        Icons.repeat_rounded,
+        Icons.favorite_border_rounded,
+      ]) {
+        expect(iconColor(tester, icon), TakiColors.iconSecondary);
+      }
+    });
+
+    testWidgets('textos con los roles de §2.2', (tester) async {
+      await openNowPlaying(tester);
+
+      final title = tester.widget<Text>(find.text(song.title)).style!;
+      expect(title.fontFamily, TakiTypography.headline.fontFamily);
+      expect(title.fontSize, TakiTypography.headline.fontSize);
+      expect(title.fontWeight, TakiTypography.headline.fontWeight);
+
+      final artist = tester.widget<Text>(find.text('Artista de prueba')).style!;
+      expect(artist.fontSize, TakiTypography.bodyLarge.fontSize);
+      expect(artist.color, TakiColors.textSecondary);
+
+      final eyebrow =
+          tester.widget<Text>(find.text('REPRODUCIENDO DESDE')).style!;
+      expect(eyebrow.letterSpacing, TakiTypography.eyebrow.letterSpacing);
+      expect(eyebrow.color, TakiColors.textMuted);
+
+      final time = tester.widget<Text>(find.text('3:20')).style!;
+      expect(
+        time.fontFeatures,
+        contains(const FontFeature.tabularFigures()),
+      );
+    });
+
+    testWidgets('carátula: TakiArtwork hero (la única sombra de la pantalla)',
+        (tester) async {
+      await openNowPlaying(tester);
+
+      final artwork = tester.widget<TakiArtwork>(find.byType(TakiArtwork));
+      expect(artwork.hero, isTrue);
+      expect(find.byType(TakiArtwork), findsOneWidget);
+    });
+
+    testWidgets('semántica: favorito, aleatorio y repetir como interruptores',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await openNowPlaying(
+        tester,
+        state: PlaybackState(
+          queue: [song],
+          currentIndex: 0,
+          shuffleEnabled: true,
+          repeatMode: RepeatMode.one,
+        ),
+      );
+      await favorites.add(song);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Quitar de favoritos')),
+        isSemantics(isButton: true, hasToggledState: true, isToggled: true),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Aleatorio')),
+        isSemantics(hasToggledState: true, isToggled: true),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Repetir, una')),
+        isSemantics(hasToggledState: true, isToggled: true),
+      );
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Cerrar')),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('áreas táctiles de al menos 48', (tester) async {
+      await openNowPlaying(tester);
+      for (final label in [
+        'Aleatorio',
+        'Anterior',
+        'Siguiente',
+        'Repetir',
+        'Cerrar',
+        'Más opciones',
+        'Añadir a favoritos',
+      ]) {
+        final size = tester.getSize(find.byTooltip(label));
+        expect(size.width, greaterThanOrEqualTo(48), reason: label);
+        expect(size.height, greaterThanOrEqualTo(48), reason: label);
+      }
+    });
+  });
+
   group('pantallas', () {
     for (final (name, size) in [
+      ('móvil 360x800', const Size(360, 800)),
+      ('móvil 412x915', const Size(412, 915)),
       ('pequeña 360x640', const Size(360, 640)),
       ('muy baja 360x480', const Size(360, 480)),
       ('horizontal 640x360', const Size(640, 360)),
