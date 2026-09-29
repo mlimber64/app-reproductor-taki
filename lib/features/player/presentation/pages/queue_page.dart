@@ -1,13 +1,25 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/artwork/artwork_cache.dart';
+import '../../../../core/artwork/artwork_providers.dart';
 import '../../../../core/domain/entities/song.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/taki_colors.dart';
+import '../../../../core/theme/taki_elevation.dart';
+import '../../../../core/theme/taki_icon_size.dart';
+import '../../../../core/theme/taki_radius.dart';
+import '../../../../core/theme/taki_spacing.dart';
+import '../../../../core/theme/taki_typography.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../../core/widgets/artwork_image.dart';
+import '../../../../core/widgets/taki_button.dart';
+import '../../../../core/widgets/taki_icon_button.dart';
+import '../../../../core/widgets/taki_interaction.dart';
+import '../../../../core/widgets/taki_section_header.dart';
+import '../../../../core/widgets/taki_song_tile.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
-import '../widgets/playing_bars.dart';
 
 /// Cola de reproducción: la canción actual y lo que viene, en el orden real
 /// de reproducción (con aleatorio, el orden mezclado).
@@ -22,8 +34,6 @@ class QueuePage extends ConsumerStatefulWidget {
 }
 
 class _QueuePageState extends ConsumerState<QueuePage> {
-  static const double _rowHeight = 64;
-
   List<Song>? _keyedQueue;
   List<Key> _keys = const [];
 
@@ -115,79 +125,71 @@ class _QueuePageState extends ConsumerState<QueuePage> {
     final upcomingCount = state.upcomingCount;
     final keys = _keysFor(queue);
 
+    // Sin margen de página: las filas (TakiSongTile) y las cabeceras
+    // (TakiSectionHeader) ya llevan los 16 laterales (§3).
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: TakiColors.background,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _TopBar(
-                onClose: _close,
-                onClear: upcomingCount == 0
-                    ? null
-                    : () => _confirmClear(upcomingCount),
-              ),
-              const SizedBox(height: 8),
-              const _SectionLabel('SONANDO AHORA'),
-              const SizedBox(height: 8),
-              if (current != null)
-                _NowPlayingCard(song: current, isPlaying: isPlaying)
-              else
-                const _EmptyMessage('No está sonando nada'),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  const _SectionLabel('A CONTINUACIÓN'),
-                  const Spacer(),
-                  if (upcomingCount > 0)
-                    Text(
-                      _summary(queue.sublist(start)),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Expanded(
-                child: upcomingCount == 0
-                    ? const _EmptyMessage('No hay más canciones en la cola')
-                    : ReorderableListView.builder(
-                        buildDefaultDragHandles: false,
-                        itemExtent: _rowHeight,
-                        itemCount: upcomingCount,
-                        onReorder: (oldIndex, newIndex) {
-                          // Flutter da el destino antes de quitar el elemento.
-                          final target =
-                              newIndex > oldIndex ? newIndex - 1 : newIndex;
-                          ref
-                              .read(moveInQueueProvider)
-                              .call(start + oldIndex, start + target);
-                        },
-                        proxyDecorator: (child, index, animation) => Material(
-                          color: AppColors.surfaceElevated,
-                          elevation: 6,
-                          borderRadius: BorderRadius.circular(12),
-                          child: child,
-                        ),
-                        itemBuilder: (context, i) {
-                          final index = start + i;
-                          return _QueueRow(
-                            key: keys[index],
-                            song: queue[index],
-                            listIndex: i,
-                            onTap: () => ref
-                                .read(skipToQueueItemProvider)
-                                .call(index),
-                            onRemove: () => _remove(state, index),
-                          );
-                        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TopBar(
+              onClose: _close,
+              onClear: upcomingCount == 0
+                  ? null
+                  : () => _confirmClear(upcomingCount),
+            ),
+            const TakiSectionHeader(
+              title: 'Sonando ahora',
+              variant: TakiSectionHeaderVariant.group,
+              isFirst: true,
+            ),
+            if (current != null)
+              _NowPlayingCard(song: current, isPlaying: isPlaying)
+            else
+              const _EmptyMessage('No está sonando nada'),
+            _UpcomingHeader(
+              summary: upcomingCount > 0 ? _summary(queue.sublist(start)) : null,
+            ),
+            Expanded(
+              child: upcomingCount == 0
+                  ? const _EmptyMessage('No hay más canciones en la cola')
+                  : ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
+                      // Alto medido con una fila real: crece con el tamaño
+                      // de texto (TakiSongTile, §8) y mantiene la lista
+                      // perezosa con miles de canciones.
+                      prototypeItem: _QueueRow.prototype(queue[start]),
+                      itemCount: upcomingCount,
+                      onReorder: (oldIndex, newIndex) {
+                        // Flutter da el destino antes de quitar el elemento.
+                        final target =
+                            newIndex > oldIndex ? newIndex - 1 : newIndex;
+                        ref
+                            .read(moveInQueueProvider)
+                            .call(start + oldIndex, start + target);
+                      },
+                      // La fila arrastrada flota (nivel 2, §5), sin sombra.
+                      proxyDecorator: (child, index, animation) => Material(
+                        color: TakiElevation.floating.surface,
+                        borderRadius: TakiRadius.mdAll,
+                        clipBehavior: Clip.antiAlias,
+                        child: child,
                       ),
-              ),
-            ],
-          ),
+                      itemBuilder: (context, i) {
+                        final index = start + i;
+                        return _QueueRow(
+                          key: keys[index],
+                          song: queue[index],
+                          listIndex: i,
+                          onTap: () =>
+                              ref.read(skipToQueueItemProvider).call(index),
+                          onRemove: () => _remove(state, index),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -200,165 +202,51 @@ class _QueuePageState extends ConsumerState<QueuePage> {
   }
 }
 
+/// Barra superior (misma altura y botón de cierre que Reproduciendo):
+/// cerrar · "Cola" · Limpiar.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.onClose, required this.onClear});
+
+  static const double _height = 56;
 
   final VoidCallback onClose;
   final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Text(
-            'Cola',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IconButton(
-              tooltip: 'Cerrar',
-              onPressed: onClose,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.surfaceElevated,
-                foregroundColor: AppColors.textPrimary,
-                fixedSize: const Size.square(44),
-                minimumSize: const Size.square(44),
-                tapTargetSize: MaterialTapTargetSize.padded,
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: onClear,
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.primary,
-                minimumSize: const Size(64, 48),
-              ),
-              child: const Text('Limpiar'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            fontSize: 12,
-            letterSpacing: 1.2,
-            color: AppColors.textSecondary,
-          ),
-    );
-  }
-}
-
-class _NowPlayingCard extends StatelessWidget {
-  const _NowPlayingCard({required this.song, required this.isPlaying});
-
-  final Song song;
-  final bool isPlaying;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          ArtworkImage(albumId: song.albumId),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _TitleAndArtist(
-              song: song,
-              titleColor: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          PlayingBars(animate: isPlaying),
-          const SizedBox(width: 6),
-        ],
-      ),
-    );
-  }
-}
-
-class _QueueRow extends StatelessWidget {
-  const _QueueRow({
-    super.key,
-    required this.song,
-    required this.listIndex,
-    required this.onTap,
-    required this.onRemove,
-  });
-
-  final Song song;
-
-  /// Posición dentro de "A continuación" (la que usa ReorderableListView).
-  final int listIndex;
-  final VoidCallback onTap;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    // 12 + el margen interno del botón (4) = el círculo en la línea de 16 de
+    // las filas.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TakiSpacing.md),
       child: SizedBox(
-        height: 64,
-        child: Row(
+        height: _height,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            ArtworkImage(albumId: song.albumId, size: 44),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _TitleAndArtist(
-                song: song,
-                titleColor: AppColors.textPrimary,
+            Semantics(
+              header: true,
+              child: Text(
+                'Cola',
+                style: TakiTypography.titleLarge.copyWith(
+                  color: TakiColors.textPrimary,
+                ),
               ),
             ),
-            IconButton(
-              tooltip: 'Quitar de la cola',
-              onPressed: onRemove,
-              icon: const Icon(Icons.close_rounded),
-              color: AppColors.textSecondary,
-              style: IconButton.styleFrom(minimumSize: const Size.square(48)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TakiIconButton(
+                icon: Icons.keyboard_arrow_down_rounded,
+                semanticLabel: 'Cerrar',
+                variant: TakiIconButtonVariant.tonal,
+                onPressed: onClose,
+              ),
             ),
-            ReorderableDragStartListener(
-              index: listIndex,
-              child: const Tooltip(
-                message: 'Arrastrar para reordenar',
-                child: SizedBox.square(
-                  dimension: 48,
-                  child: Icon(
-                    Icons.drag_handle_rounded,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TakiButton(
+                label: 'Limpiar',
+                variant: TakiButtonVariant.tertiary,
+                onPressed: onClear,
               ),
             ),
           ],
@@ -368,45 +256,218 @@ class _QueueRow extends StatelessWidget {
   }
 }
 
-class _TitleAndArtist extends StatelessWidget {
-  const _TitleAndArtist({required this.song, required this.titleColor});
+/// "A CONTINUACIÓN" con el resumen (número de canciones y duración) a la
+/// derecha, en la línea base del título. `TakiSectionHeader` no tiene
+/// metadata en la variante grupo: se compone al lado.
+class _UpcomingHeader extends StatelessWidget {
+  const _UpcomingHeader({required this.summary});
 
-  final Song song;
-  final Color titleColor;
+  final String? summary;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final summary = this.summary;
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(
-          song.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodyLarge?.copyWith(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: titleColor,
+        const Expanded(
+          child: TakiSectionHeader(
+            title: 'A continuación',
+            variant: TakiSectionHeaderVariant.group,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          song.artist ?? 'Artista desconocido',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodyMedium?.copyWith(
-            fontSize: 13,
-            color: AppColors.textSecondary,
+        if (summary != null)
+          Padding(
+            padding: const EdgeInsets.only(right: TakiSpacing.pageGutter),
+            child: Text(
+              summary,
+              style: TakiTypography.caption.copyWith(
+                color: TakiColors.textMuted,
+              ),
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
+/// La canción actual (§4: fila actual de la Cola, radio `md`): una
+/// `TakiSongTile` en estado sonando/en pausa sobre una zona agrupada
+/// (nivel 1, §5).
+class _NowPlayingCard extends StatelessWidget {
+  const _NowPlayingCard({required this.song, required this.isPlaying});
+
+  final Song song;
+  final bool isPlaying;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TakiSpacing.sm),
+      child: ClipRRect(
+        borderRadius: TakiRadius.mdAll,
+        child: ColoredBox(
+          color: TakiElevation.raised.surface,
+          child: _SongArtwork(
+            albumId: song.albumId,
+            builder: (artwork) => TakiSongTile(
+              song: song,
+              artwork: artwork,
+              showDuration: false,
+              playback:
+                  isPlaying ? TakiNowPlaying.playing : TakiNowPlaying.paused,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila de "A continuación": `TakiSongTile` con quitar y el asa de arrastre.
+class _QueueRow extends StatelessWidget {
+  const _QueueRow({
+    super.key,
+    required this.song,
+    required this.listIndex,
+    required this.onTap,
+    required this.onRemove,
+  }) : _isPrototype = false;
+
+  /// Fila de referencia para medir el alto (no se muestra ni reacciona).
+  const _QueueRow.prototype(this.song)
+      : listIndex = 0,
+        onTap = null,
+        onRemove = null,
+        _isPrototype = true;
+
+  static const String removeLabel = 'Quitar de la cola';
+  static const String reorderLabel = 'Arrastrar para reordenar';
+
+  final Song song;
+
+  /// Posición dentro de "A continuación" (la que usa ReorderableListView).
+  final int listIndex;
+  final VoidCallback? onTap;
+  final VoidCallback? onRemove;
+  final bool _isPrototype;
+
+  @override
+  Widget build(BuildContext context) {
+    final trailing = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TakiIconButton(
+          icon: Icons.close_rounded,
+          semanticLabel: removeLabel,
+          variant: TakiIconButtonVariant.subtle,
+          onPressed: onRemove,
+        ),
+        ReorderableDragStartListener(
+          index: listIndex,
+          enabled: !_isPrototype,
+          child: Tooltip(
+            message: reorderLabel,
+            child: SizedBox.square(
+              dimension: TakiInteraction.minTouchTarget,
+              child: Icon(
+                Icons.drag_handle_rounded,
+                size: TakiIconSize.md.value,
+                color: TakiColors.iconSecondary,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (_isPrototype) {
+      return TakiSongTile(song: song, showDuration: false, trailing: trailing);
+    }
+
+    return _SongArtwork(
+      albumId: song.albumId,
+      builder: (artwork) => TakiSongTile(
+        song: song,
+        artwork: artwork,
+        showDuration: false,
+        onTap: onTap,
+        trailing: trailing,
+      ),
+    );
+  }
+}
+
+/// Resuelve la carátula de una fila con [ArtworkCache] (bytes →
+/// `MemoryImage`), la misma fuente que Reproduciendo y el resto de la app.
+class _SongArtwork extends ConsumerStatefulWidget {
+  const _SongArtwork({required this.albumId, required this.builder});
+
+  final int? albumId;
+  final Widget Function(ImageProvider? artwork) builder;
+
+  @override
+  ConsumerState<_SongArtwork> createState() => _SongArtworkState();
+}
+
+class _SongArtworkState extends ConsumerState<_SongArtwork> {
+  ArtworkKey? _key;
+  Uint8List? _bytes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_SongArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.albumId != widget.albumId) _resolve();
+  }
+
+  void _resolve() {
+    final albumId = widget.albumId;
+    if (albumId == null) {
+      _key = null;
+      _bytes = null;
+      return;
+    }
+
+    final key = (
+      albumId: albumId,
+      size: (TakiSongTile.artworkSize * MediaQuery.devicePixelRatioOf(context))
+          .round(),
+    );
+    if (key == _key) return;
+    _key = key;
+
+    final cache = ref.read(artworkCacheProvider);
+    if (cache.contains(key)) {
+      _bytes = cache.peek(key);
+      return;
+    }
+
+    _bytes = null;
+    cache.load(key).then((bytes) {
+      if (mounted && _key == key) setState(() => _bytes = bytes);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    // Los bytes son la clave del MemoryImage: tras un reescaneo llegan bytes
+    // nuevos y la imagen se actualiza.
+    return widget.builder(
+      bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
+    );
+  }
+}
+
+/// Mensaje en línea cuando una parte de la cola está vacía.
 class _EmptyMessage extends StatelessWidget {
   const _EmptyMessage(this.text);
 
@@ -415,13 +476,14 @@ class _EmptyMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TakiSpacing.pageGutter,
+        vertical: TakiSpacing.xl,
+      ),
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+        style: TakiTypography.body.copyWith(color: TakiColors.textSecondary),
       ),
     );
   }

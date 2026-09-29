@@ -1043,7 +1043,7 @@ filas vecinas no lo tapen), con las medidas
 |---|---|---|
 | `TakiPlaybackControls` · **implementado (1.6B), en Reproduciendo (1.6C)** | `core/widgets/` (presentacional: estado y callbacks desde fuera) | `_Controls` y `_PlayPauseButton` (Reproduciendo) |
 | `TakiProgressBar` · **implementado (1.6B), en Reproduciendo (1.6C)** | `core/widgets/` (recibe posición y duración) | `_SeekBar` (Reproduciendo). La barra de 2 px del mini player no lo usa: es decorativa y no se arrastra |
-| `TakiQueueItem` | `features/player/presentation/widgets/` | `_QueueRow` y `_NowPlayingCard` (Cola); puede componer `TakiSongTile` |
+| `TakiQueueItem` · **no hace falta (1.6D)** | — | `_QueueRow` y `_NowPlayingCard` (Cola) componen `TakiSongTile` directamente (asa y quitar van en `trailing`) |
 
 ---
 
@@ -1140,6 +1140,35 @@ no sale de `player`). Mientras el seek está en curso, la página pasa el
 destino como posición para que la barra no vuelva un instante atrás (como
 hacía `_SeekBar`). Resuelve en pantalla los huecos de 1.6A de play/pausa,
 barra, valor semántico de repetir ("Repetir", valor "una") e iconos `_on`.
+
+**Estado de la Cola (Fase 1.6D):** migrada a componentes Taki sin cambiar
+su comportamiento (reproducir, quitar con Deshacer, reordenar, Limpiar con
+confirmación, cerrar).
+
+- **Filas:** `TakiSongTile` (carátula 48, `trackTitle` / `trackSubtitle`) con
+  quitar (`TakiIconButton` subtle) y el asa de arrastre en `trailing`. Sin
+  duración por fila, como antes (el total va en el resumen). El alto se mide
+  con una fila real (`prototypeItem`): crece con el tamaño de texto (I13) y
+  la lista sigue siendo perezosa.
+- **Canción actual:** `TakiSongTile` en estado sonando/en pausa (título en
+  `primary`, barras sobre la carátula, "Reproduciendo" / "En pausa") sobre
+  una zona de nivel 1 (`surface`) con radio `md` (§4), 8 dentro del borde.
+  Sustituye a `PlayingBars` a la derecha y al fondo `surfaceElevated`.
+- **Cabecera:** barra de 56 como Reproduciendo: `TakiIconButton` tonal
+  (cerrar), "Cola" en `titleLarge` y "Limpiar" como `TakiButton` terciario.
+  Grupos con `TakiSectionHeader` (grupo); el resumen ("2 canciones · 5 min")
+  va a su derecha en `caption` / `textMuted`.
+- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` (como
+  Reproduciendo), a 48 px: comparte entradas de caché con las filas de la
+  Biblioteca.
+- **Fila arrastrada:** `surfaceElevated` (nivel 2) con radio `md`, sin la
+  sombra de antes (§5).
+- **Huecos:** `TakiSectionHeader` (grupo) no admite metadata a la derecha:
+  el resumen se compone al lado. Los mensajes "No está sonando nada" y "No
+  hay más canciones en la cola" son avisos en línea (`body`,
+  `textSecondary`), no pantallas vacías: `TakiEmptyState` (icono, título
+  `titleLarge`) no encaja y no se inventa uno. Con la fila actual
+  enmarcada, su carátula queda 8 px más adentro que las de la lista.
 
 **Para cada paso:**
 
