@@ -1291,6 +1291,63 @@ a una playlist" y los diálogos siguen como estaban.
   de la playlist, el sheet "Añadir a una playlist" y los diálogos siguen en
   Material. `PlaylistCover` sigue en uso en el detalle y en el sheet.
 
+**Estado de Playlist Detail — Fase 1.7C-2 (completa el paso 5):**
+`PlaylistDetailPage` migrada; solo cambia la presentación. La barra superior
+y su menú ⋮ (Renombrar / Eliminar playlist) siguen siendo Material.
+
+- **Cabecera:** zona agrupada (nivel 1, `TakiElevation.raised`) con la
+  portada `TakiArtwork.mosaic` de 128 (`artworkHeader`), "PLAYLIST" en
+  `eyebrow` / `textMuted`, el nombre en `headline` (2 líneas, encabezado
+  semántico) y el resumen de las canciones visibles en `trackSubtitle`.
+  Portada como antes: álbumes distintos de las 4 primeras canciones
+  visibles; vacía → placeholder con borde; sin carátulas → una pieza sin
+  imagen. Sin la sombra hero.
+- **Reproducir / Aleatorio:** `TakiButton` primario y secundario con icono,
+  en un `Wrap` (con texto grande Aleatorio baja de línea); deshabilitados
+  si la playlist no tiene canciones visibles. Sustituyen a
+  `PlayShuffleButtons`, que se queda sin consumidores (se borra en una
+  fase de limpieza; está en `core/widgets`).
+- **Filas:** `TakiSongTile` con duración, ⋯ (`onMore`) y el asa de arrastre
+  en `trailing` (48, tooltip "Arrastrar para reordenar"), como en la Cola.
+  Tocar reproduce la lista visible desde esa fila; mantener pulsado y ⋯
+  abren el mismo menú con "Quitar de la playlist". Canción actual: estado
+  sonando / en pausa de `TakiSongTile` (antes solo color; I2 resuelto). Se
+  marca por id de canción, así que un duplicado de la actual se marca en
+  todas sus apariciones, como antes. Sin corazón de favorita.
+- **Reordenar:** mismo `ReorderableListView` con `ValueKey(entry.id)`
+  (duplicados), traducción fila visible → posición real, estado optimista
+  hasta que la base emite y `MovePlaylistSong`. El alto fijo de 64
+  (`itemExtent`) pasa a `prototypeItem` con una fila real (⋯ y asa
+  incluidos): crece con el texto y la lista sigue siendo perezosa. La fila
+  arrastrada flota en `surfaceElevated` con radio `md`, sin sombra (antes
+  elevación 6), como en la Cola.
+- **Quitar:** optimista, SnackBar "Quitada de la playlist" con Deshacer, sin
+  cambios.
+- **Estados:** sin permiso → `TakiErrorState` de permiso (mismos textos,
+  "Permitir acceso" / "Abrir ajustes"); error de la base o de la biblioteca
+  → `TakiErrorState` con Reintentar (`retryPlaylists`); playlist
+  inexistente → `TakiEmptyState` de primer uso sin acción
+  (`playlist_remove_rounded`): se eliminó, no es un fallo, y si se borra
+  mientras está abierta se vuelve atrás como antes; vacía → `TakiEmptyState`
+  en el pie de la lista (`playlist_add_rounded`, "Sin canciones", mismo
+  texto, sin acción). La carga sigue siendo el spinner. Pull-to-refresh
+  solo con datos (también vacía), como antes.
+- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage`, a 128 en la
+  portada y a 48 en las filas, con un adaptador privado de la página.
+- **Huecos:** cuarta copia del adaptador bytes → `MemoryImage` (ver 1.6E).
+  `TakiEmptyState` trae su propio scroll: en el pie de una lista se envuelve
+  en `IgnorePointer` para que el arrastre llegue al pull-to-refresh (no tiene
+  acciones). El asa no es un componente Taki (icono + `Tooltip`, igual que
+  en la Cola). `TakiButton` no recorta su texto: con la fuente de pruebas
+  "Permitir acceso" no cabe al 150 % (con las fuentes reales sí). Con la
+  playlist vacía, Aleatorio (secundario deshabilitado) solo cambia el color
+  del texto y se distingue poco del habilitado (estilo de `TakiButton`).
+  Con texto al 150 % a 360 px, ⋯ y el asa (96) dejan poco ancho al título,
+  que se recorta pronto. Barra
+  superior, menú ⋮, diálogos y el sheet de acciones siguen en Material.
+  `PlayShuffleButtons` y `PlaylistCover` (este aún en el sheet "Añadir a una
+  playlist") quedan para la limpieza.
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.

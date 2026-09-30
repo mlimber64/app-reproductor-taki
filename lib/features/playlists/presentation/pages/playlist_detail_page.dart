@@ -1,21 +1,32 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/artwork/artwork_cache.dart';
+import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/domain/entities/song.dart';
+import '../../../../core/theme/taki_colors.dart';
+import '../../../../core/theme/taki_elevation.dart';
+import '../../../../core/theme/taki_icon_size.dart';
+import '../../../../core/theme/taki_radius.dart';
+import '../../../../core/theme/taki_spacing.dart';
+import '../../../../core/theme/taki_typography.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../../core/widgets/message_view.dart';
-import '../../../../core/widgets/play_shuffle_buttons.dart';
 import '../../../../core/widgets/song_actions.dart';
-import '../../../../core/widgets/song_tile.dart';
+import '../../../../core/widgets/taki_artwork.dart';
+import '../../../../core/widgets/taki_button.dart';
+import '../../../../core/widgets/taki_empty_state.dart';
+import '../../../../core/widgets/taki_error_state.dart';
+import '../../../../core/widgets/taki_interaction.dart';
+import '../../../../core/widgets/taki_song_tile.dart';
 import '../../../library/presentation/providers/songs_notifier.dart';
 import '../../../player/presentation/providers/player_providers.dart';
 import '../../domain/entities/playlist.dart';
 import '../../domain/entities/playlist_entry.dart';
 import '../providers/playlists_providers.dart';
 import '../widgets/delete_playlist_dialog.dart';
-import '../widgets/playlist_cover.dart';
 import '../widgets/playlist_name_dialog.dart';
 
 /// Detalle de una playlist: encabezado, Reproducir/Aleatorio y sus canciones
@@ -174,25 +185,28 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
   Widget _body(AsyncValue<Playlist?> playlistValue, Playlist? playlist) {
     if (playlistValue.hasError) return _error();
     if (playlist == null) {
+      // No es un fallo: la playlist se eliminó. Estado neutro, sin acción.
       return playlistValue.hasValue
-          ? const MessageView(
+          ? const TakiEmptyState(
               icon: Icons.playlist_remove_rounded,
               title: 'Esta playlist ya no existe',
-              message: 'Puede que se haya eliminado.',
+              description: 'Puede que se haya eliminado.',
             )
           : const Center(child: CircularProgressIndicator());
     }
 
     final library = ref.watch(songsProvider).valueOrNull;
     if (library is LibraryNeedsPermission) {
-      return MessageView(
-        icon: Icons.lock_outline_rounded,
+      return TakiErrorState(
+        kind: TakiErrorStateKind.permission,
         title: 'Taki necesita acceso a tu música',
         message: 'Las playlists se muestran a partir de las canciones de tu '
             'teléfono.',
-        actionLabel:
-            library.permanentlyDenied ? 'Abrir ajustes' : 'Permitir acceso',
-        onAction: ref.read(songsProvider.notifier).requestPermission,
+        action: TakiStateAction(
+          label:
+              library.permanentlyDenied ? 'Abrir ajustes' : 'Permitir acceso',
+          onPressed: ref.read(songsProvider.notifier).requestPermission,
+        ),
       );
     }
 
@@ -215,12 +229,13 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
         );
   }
 
-  Widget _error() => MessageView(
-        icon: Icons.error_outline_rounded,
+  Widget _error() => TakiErrorState(
         title: 'Playlist no disponible',
         message: 'No pudimos leer esta playlist.',
-        actionLabel: 'Reintentar',
-        onAction: () => retryPlaylists(ref),
+        action: TakiStateAction(
+          label: 'Reintentar',
+          onPressed: () => retryPlaylists(ref),
+        ),
       );
 }
 
@@ -263,72 +278,143 @@ class _SongList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Solo la canción actual y si suena: no reconstruir con la posición.
     final currentSongId = ref.watch(
       currentSongProvider.select((song) => song.valueOrNull?.id),
     );
+    final isPlaying = ref.watch(
+          playbackStateProvider.select((state) => state.valueOrNull?.isPlaying),
+        ) ??
+        false;
 
     return ReorderableListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
-      itemExtent: SongTile.height,
+      // Alto medido con una fila real: crece con el tamaño de texto
+      // (TakiSongTile, §8) y la lista sigue siendo perezosa.
+      prototypeItem:
+          items.isEmpty ? null : _SongRow.prototype(items.first.song),
       header: _Header(
         playlist: playlist,
         items: items,
         onPlay: items.isEmpty ? null : () => onPlay(items, 0),
         onShuffle: items.isEmpty ? null : () => onShuffle(items),
       ),
+      // TakiEmptyState se desplaza por su cuenta: sin IgnorePointer, arrastrar
+      // sobre él no llegaría a la lista y no habría pull-to-refresh. No tiene
+      // acciones, así que no se pierde ninguna.
       footer: items.isEmpty
-          ? const _EmptyPlaylist()
-          : const SizedBox(height: 16),
+          ? const IgnorePointer(
+              child: TakiEmptyState(
+                icon: Icons.playlist_add_rounded,
+                title: 'Sin canciones',
+                description: 'Esta playlist está vacía. Añade canciones desde '
+                    'la Biblioteca.',
+              ),
+            )
+          : const SizedBox(height: TakiSpacing.lg),
       itemCount: items.length,
       onReorder: (oldIndex, newIndex) => onReorder(items, oldIndex, newIndex),
+      // La fila arrastrada flota (nivel 2, §5), sin sombra; como en la Cola.
       proxyDecorator: (child, index, animation) => Material(
-        color: AppColors.surfaceElevated,
-        elevation: 6,
+        color: TakiElevation.floating.surface,
+        borderRadius: TakiRadius.mdAll,
+        clipBehavior: Clip.antiAlias,
         child: child,
       ),
       itemBuilder: (context, index) {
         final item = items[index];
-        return SongTile(
+        return _SongRow(
+          // La entrada, no la canción: una playlist admite duplicados.
           key: ValueKey(item.entry.id),
           song: item.song,
-          isCurrent: item.song.id == currentSongId,
+          listIndex: index,
+          playback: item.song.id != currentSongId
+              ? TakiNowPlaying.none
+              : isPlaying
+                  ? TakiNowPlaying.playing
+                  : TakiNowPlaying.paused,
           onTap: () => onPlay(items, index),
-          onLongPress: () => _showActions(context, ref, item),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: 'Más opciones',
-                onPressed: () => _showActions(context, ref, item),
-                icon: const Icon(Icons.more_horiz_rounded),
-                color: AppColors.textSecondary,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size.square(48),
-                ),
-              ),
-              ReorderableDragStartListener(
-                index: index,
-                child: const Tooltip(
-                  message: 'Arrastrar para reordenar',
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: Icon(
-                      Icons.drag_handle_rounded,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          onActions: () => _showActions(context, ref, item),
         );
       },
     );
   }
 }
 
-class _Header extends ConsumerWidget {
+/// Fila de la playlist: `TakiSongTile` con ⋯ (acciones) y el asa de
+/// arrastre.
+class _SongRow extends StatelessWidget {
+  const _SongRow({
+    super.key,
+    required this.song,
+    required this.listIndex,
+    required this.playback,
+    required this.onTap,
+    required this.onActions,
+  }) : _isPrototype = false;
+
+  /// Fila de referencia para medir el alto (no se muestra ni reacciona).
+  const _SongRow.prototype(this.song)
+      : listIndex = 0,
+        playback = TakiNowPlaying.none,
+        onTap = null,
+        onActions = null,
+        _isPrototype = true;
+
+  static const String reorderLabel = 'Arrastrar para reordenar';
+
+  final Song song;
+
+  /// Posición en la lista visible (la que usa ReorderableListView).
+  final int listIndex;
+  final TakiNowPlaying playback;
+  final VoidCallback? onTap;
+  final VoidCallback? onActions;
+  final bool _isPrototype;
+
+  @override
+  Widget build(BuildContext context) {
+    final handle = ReorderableDragStartListener(
+      index: listIndex,
+      enabled: !_isPrototype,
+      child: Tooltip(
+        message: reorderLabel,
+        child: SizedBox.square(
+          dimension: TakiInteraction.minTouchTarget,
+          child: Icon(
+            Icons.drag_handle_rounded,
+            size: TakiIconSize.md.value,
+            color: TakiColors.iconSecondary,
+          ),
+        ),
+      ),
+    );
+
+    // El prototipo lleva ⋯ para medir igual que una fila real.
+    if (_isPrototype) {
+      return TakiSongTile(song: song, onMore: () {}, trailing: handle);
+    }
+
+    return _ArtworkImages(
+      albumIds: [?song.albumId],
+      size: TakiSongTile.artworkSize,
+      builder: (images) => TakiSongTile(
+        song: song,
+        artwork: images.firstOrNull,
+        playback: playback,
+        onTap: onTap,
+        onLongPress: onActions,
+        onMore: onActions,
+        trailing: handle,
+      ),
+    );
+  }
+}
+
+/// Portada, "PLAYLIST", nombre, resumen y Reproducir / Aleatorio sobre una
+/// zona agrupada (nivel 1, §5).
+class _Header extends StatelessWidget {
   const _Header({
     required this.playlist,
     required this.items,
@@ -336,63 +422,80 @@ class _Header extends ConsumerWidget {
     required this.onShuffle,
   });
 
+  /// Lado de la portada (`artworkHeader`, §7.3).
+  static const double coverSize = 128;
+
   final Playlist playlist;
   final List<PlaylistItem> items;
   final VoidCallback? onPlay;
   final VoidCallback? onShuffle;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final textTheme = Theme.of(context).textTheme;
+  Widget build(BuildContext context) {
     final total = items.fold(
       Duration.zero,
       (sum, item) => sum + item.song.duration,
     );
+    // Como antes: álbumes distintos de las 4 primeras canciones visibles; con
+    // 4, mosaico; con menos, la primera carátula.
+    final albums = <int>{
+      for (final item in items.take(4)) ?item.song.albumId,
+    }.toList();
 
     return Container(
-      color: AppColors.surface,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      color: TakiElevation.raised.surface,
+      margin: const EdgeInsets.only(bottom: TakiSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(
+        TakiSpacing.pageGutter,
+        TakiSpacing.sm,
+        TakiSpacing.pageGutter,
+        TakiSpacing.lg,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              PlaylistCover(
-                albumIds: [for (final item in items.take(4)) item.song.albumId],
-                isEmpty: items.isEmpty,
-                size: 128,
-                borderRadius: 18,
+              _ArtworkImages(
+                albumIds: albums,
+                size: coverSize,
+                builder: (images) => TakiArtwork.mosaic(
+                  size: coverSize,
+                  // Vacía: sin imágenes (placeholder con borde). Con
+                  // canciones pero sin carátulas: una pieza sin imagen.
+                  images: items.isEmpty || images.isNotEmpty
+                      ? images
+                      : const [null],
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: TakiSpacing.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'PLAYLIST',
-                      style: textTheme.labelSmall?.copyWith(
-                        fontSize: 11,
-                        letterSpacing: 1.5,
-                        color: AppColors.textSecondary,
+                      style: TakiTypography.eyebrow.copyWith(
+                        color: TakiColors.textMuted,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      playlist.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                    const SizedBox(height: TakiSpacing.xs),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        playlist.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TakiTypography.headline.copyWith(
+                          color: TakiColors.textPrimary,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: TakiSpacing.xs),
                     Text(
                       formatSongsSummary(items.length, total),
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                      style: TakiTypography.trackSubtitle.copyWith(
+                        color: TakiColors.textSecondary,
                       ),
                     ),
                   ],
@@ -400,28 +503,101 @@ class _Header extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          PlayShuffleButtons(onPlay: onPlay, onShuffle: onShuffle),
+          const SizedBox(height: TakiSpacing.lg),
+          // Con texto grande, Aleatorio pasa debajo en vez de desbordar.
+          Wrap(
+            spacing: TakiSpacing.md,
+            runSpacing: TakiSpacing.md,
+            children: [
+              TakiButton(
+                label: 'Reproducir',
+                icon: Icons.play_arrow_rounded,
+                onPressed: onPlay,
+              ),
+              TakiButton(
+                label: 'Aleatorio',
+                icon: Icons.shuffle_rounded,
+                variant: TakiButtonVariant.secondary,
+                onPressed: onShuffle,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _EmptyPlaylist extends StatelessWidget {
-  const _EmptyPlaylist();
+/// Resuelve carátulas con [ArtworkCache] (bytes → `MemoryImage`) para la
+/// portada y las filas, como la Biblioteca y la lista de Playlists (adaptador
+/// repetido: ver docs/DESIGN_SYSTEM.md, Fase 1.7C-2).
+class _ArtworkImages extends ConsumerStatefulWidget {
+  const _ArtworkImages({
+    required this.albumIds,
+    required this.size,
+    required this.builder,
+  });
+
+  final List<int> albumIds;
+  final double size;
+  final Widget Function(List<ImageProvider?> images) builder;
+
+  @override
+  ConsumerState<_ArtworkImages> createState() => _ArtworkImagesState();
+}
+
+class _ArtworkImagesState extends ConsumerState<_ArtworkImages> {
+  List<ArtworkKey> _keys = const [];
+  final Map<ArtworkKey, Uint8List?> _bytes = {};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_ArtworkImages oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.albumIds, widget.albumIds) ||
+        oldWidget.size != widget.size) {
+      _resolve();
+    }
+  }
+
+  void _resolve() {
+    final size =
+        (widget.size * MediaQuery.devicePixelRatioOf(context)).round();
+    final keys = [
+      for (final albumId in widget.albumIds) (albumId: albumId, size: size),
+    ];
+    if (listEquals(keys, _keys)) return;
+    _keys = keys;
+    _bytes.removeWhere((key, _) => !keys.contains(key));
+
+    final cache = ref.read(artworkCacheProvider);
+    for (final key in keys) {
+      if (_bytes.containsKey(key)) continue;
+      if (cache.contains(key)) {
+        _bytes[key] = cache.peek(key);
+        continue;
+      }
+      cache.load(key).then((bytes) {
+        if (mounted && _keys.contains(key)) {
+          setState(() => _bytes[key] = bytes);
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 16),
-      child: Text(
-        'Esta playlist está vacía. Añade canciones desde la Biblioteca.',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-      ),
-    );
+    return widget.builder([
+      for (final key in _keys)
+        switch (_bytes[key]) {
+          final bytes? when bytes.isNotEmpty => MemoryImage(bytes),
+          _ => null,
+        },
+    ]);
   }
 }
