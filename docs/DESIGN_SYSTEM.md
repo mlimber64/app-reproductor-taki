@@ -48,17 +48,22 @@ contenido online) sin tener que inventar otro lenguaje.
 
 ### Lo que existe hoy
 
+Inventario de partida, **anterior a la migración**. `SongTile`,
+`PlayShuffleButtons`, `MessageView` y `PlayingBars` se sustituyeron por
+`TakiSongTile`, `TakiButton`, `TakiEmptyState` / `TakiErrorState` y
+`TakiPlayingIndicator`, y se eliminaron en la Fase 1.7E.
+
 | Pieza | Dónde | Qué hace |
 |---|---|---|
 | `AppColors` | `lib/core/theme/app_colors.dart` | Paleta "Medianoche + ámbar": fondo `#111318`, surface `#1B1E26`, surfaceElevated `#1F232D`, border `#2A2E39`, texto `#F2F0EB` / `#A3A6B0`, acento ámbar `#F5A524` |
 | `AppTheme` | `lib/app/theme/app_theme.dart` | `ThemeData` Material 3 oscuro; Sora (display/headline/title) y DM Sans (resto), empaquetadas como fuentes de la app (`fonts:` en `pubspec.yaml`, Fase 1.2); tamaño táctil mínimo 48 |
 | `ArtworkImage` | `lib/core/widgets/` | Carátula cuadrada con radio, caché LRU, placeholder con nota musical |
-| `SongTile` | `lib/core/widgets/` | Fila de 64 px: carátula 48, título, artista, duración |
-| `PlayShuffleButtons` | `lib/core/widgets/` | Botones "Reproducir" (acento) y "Aleatorio" (surface + borde), en píldora de 48 |
-| `MessageView` | `lib/core/widgets/` | Estado vacío / error / permiso: icono 56 en acento, título, texto, botón |
+| `SongTile` · *eliminado en 1.7E* | `lib/core/widgets/` | Fila de 64 px: carátula 48, título, artista, duración |
+| `PlayShuffleButtons` · *eliminado en 1.7E* | `lib/core/widgets/` | Botones "Reproducir" (acento) y "Aleatorio" (surface + borde), en píldora de 48 |
+| `MessageView` · *eliminado en 1.7E* | `lib/core/widgets/` | Estado vacío / error / permiso: icono 56 en acento, título, texto, botón |
 | `MiniPlayer` | `features/player/.../widgets/` | Tarjeta de 64 px sobre la barra inferior, radio 16, barra de progreso de 3 px |
 | `NowPlayingPage` | `features/player/.../pages/` | Carátula grande (radio 24, sombra), título 24, controles, seek, botón "Cola" |
-| `PlayingBars` | `features/player/.../widgets/` | Ecualizador de 3 barras que marca la canción que suena en la Cola |
+| `PlayingBars` · *eliminado en 1.7E* | `features/player/.../widgets/` | Ecualizador de 3 barras que marca la canción que suena en la Cola |
 | `PlaylistCover` | `features/playlists/.../widgets/` | Portada 2×2 o carátula única; icono de lista si está vacía |
 
 El ícono de la app (`android/app/src/main/res/mipmap-*`) usa un fondo
@@ -76,7 +81,9 @@ naranja de este sistema sale del extremo cálido de ese degradado.
   `app/theme` ya siguen la separación tokens / composición del tema.
 - **Componentes:** `ArtworkImage`, `SongTile`, `PlayShuffleButtons`,
   `MessageView`, `MiniPlayer`, `PlayingBars` y `PlaylistCover` son la base de
-  los componentes `Taki*` del [inventario](#21-inventario-de-componentes).
+  los componentes `Taki*` del [inventario](#21-inventario-de-componentes)
+  (`SongTile`, `PlayShuffleButtons`, `MessageView` y `PlayingBars` ya se
+  eliminaron, en la Fase 1.7E).
 - **Decisiones que ya son correctas:** tamaño táctil de 48, tooltips en todos
   los botones de icono, `Semantics(toggled:)` en aleatorio, cifras tabulares
   en duraciones, iconos de la familia *rounded*, transición de pantalla
@@ -87,18 +94,18 @@ naranja de este sistema sale del extremo cálido de ese degradado.
 | # | Severidad | Inconsistencia | Evidencia |
 |---|---|---|---|
 | I1 | Alta · **Resuelta en Fase 1.2** | **Las fuentes no llegaban a la build de release.** `google_fonts` las descargaba en tiempo de ejecución, no estaban incluidas como assets y el `AndroidManifest.xml` principal no declara `INTERNET` (solo los de debug y profile). En release la app usaba la fuente de respaldo del sistema. Ahora van empaquetadas (ver §2.1) y `google_fonts` se retiró | `pubspec.yaml` (`fonts:`), `assets/fonts/` |
-| I2 | Media | La canción que suena se marca **solo con color** (título en acento) en Biblioteca, Favoritos y el detalle de playlist. La Cola sí añade `PlayingBars` | `core/widgets/song_tile.dart` |
+| I2 | Media · **Resuelta en 1.7A–1.7C-2** | La canción que suena se marca **solo con color** (título en acento) en Biblioteca, Favoritos y el detalle de playlist. La Cola sí añade `PlayingBars` | `core/widgets/song_tile.dart` (eliminado en 1.7E) |
 | I3 | Media | Aleatorio y "repetir todo" activos se distinguen **solo por color** (acento vs gris); "repetir una" sí cambia de icono | `now_playing_page.dart` (`toggleColor`) |
 | I4 | Media | Seis radios distintos para elementos parecidos: 10, 12, 14, 16, 24 y píldora | `artwork_image`, `queue_page`, `mini_player`, `app_theme`, `now_playing_page` |
 | I5 | Media | Tamaños de fuente fijados a mano con `copyWith(fontSize:)` (11, 12, 13, 14, 15, 20, 24, 26) en lugar de roles con nombre. El mismo rol cambia entre pantallas: título de canción 15 en listas y 14 en el mini player; "eyebrow" 11/1.5 en Reproduciendo y 12/1.2 en Playlists y Cola | varias páginas |
-| I6 | Media | `MessageView` pinta igual el vacío, el error y el permiso (icono siempre en acento): un error no se distingue de "aún no tienes favoritos" | `core/widgets/message_view.dart` |
+| I6 | Media · **Resuelta en 1.7A–1.7C-2** | `MessageView` pinta igual el vacío, el error y el permiso (icono siempre en acento): un error no se distingue de "aún no tienes favoritos" | `core/widgets/message_view.dart` (eliminado en 1.7E) |
 | I7 | Baja | Márgenes laterales mezclados: 16 (listas), 20 (Cola, sheets), 24 (Reproduciendo), 32 (estados vacíos) | páginas |
 | I8 | Baja | Alturas de fila 64 y 68, y carátulas de 44, 48, 52 y 128 para funciones muy parecidas | `song_tile`, `playlists_page`, `queue_page`, `mini_player`, `playlist_cover` |
 | I9 | Baja | El botón de reproducir es un círculo **blanco** en el mini player y **ámbar** en Reproduciendo, sin una regla documentada | `mini_player.dart`, `now_playing_page.dart` |
 | I10 | Baja | `surface` y `surfaceElevated` casi no se distinguen (contraste entre ellos 1.06:1) | `app_colors.dart` |
 | I11 | Baja | No hay colores semánticos de error, éxito o aviso; el error sale del `ColorScheme.fromSeed` por defecto. Tampoco hay tema de SnackBar (se usa el claro por defecto de Material 3) | `app_theme.dart` |
 | I12 | Baja | Tokens sin uso: `accentCoral`, `accentBlue`, `accentMint` y el parámetro `accent` de `AppTheme.dark()` | `app_colors.dart`, `app_theme.dart` |
-| I13 | Baja | `SongTile` tiene alto fijo (64) y la Biblioteca usa `SliverFixedExtentList`: con texto grande (200 %) el contenido puede no caber | `library_page.dart`, `song_tile.dart` |
+| I13 | Baja · **Resuelta en 1.7A** | `SongTile` tiene alto fijo (64) y la Biblioteca usa `SliverFixedExtentList`: con texto grande (200 %) el contenido puede no caber | `library_page.dart`, `song_tile.dart` (eliminado en 1.7E) |
 | I14 | Baja | Reproduciendo muestra "REPRODUCIENDO DESDE Biblioteca" siempre, y su botón "Más opciones" no hace nada | `now_playing_page.dart:317, 332` |
 | I15 | Baja | Mezcla de variantes de icono fuera de la navegación (`music_off_outlined`, `delete_outline_rounded`, `lock_outline_rounded` junto a `*_rounded` rellenos) | páginas |
 
@@ -142,7 +149,7 @@ Este documento **no corrige** ninguna: define el sistema al que se migrará.
 Music): fondo *midnight* azulado en lugar de negro o gris neutro, acento
 naranja cálido derivado del ícono, títulos en Sora geométrica, reproductor
 sin fondos teñidos por la carátula a pantalla completa (ver
-[§11](#11-reproduciendo)) e indicador "sonando" propio (`PlayingBars`).
+[§11](#11-reproduciendo)) e indicador "sonando" propio (`TakiPlayingIndicator`).
 
 ---
 
@@ -526,7 +533,7 @@ Fila de una canción. Es el componente más repetido de la app.
 | Estado | Aspecto | Además del color |
 |---|---|---|
 | Normal | Como arriba | — |
-| **Sonando** | Título en `primary` y `PlayingBars` (16 px) sobre la carátula, con velo `background` al 55 %; las barras se detienen si está en pausa | Barras visibles + semántica "Reproduciendo" |
+| **Sonando** | Título en `primary` y `TakiPlayingIndicator` (16 px) sobre la carátula, con velo `background` al 55 %; las barras se detienen si está en pausa | Barras visibles + semántica "Reproduciendo" |
 | **Favorita** | Corazón relleno de 16 px en `primary` delante del subtítulo, solo donde sea relevante (Biblioteca, playlists; no en Favoritos) | Forma del icono |
 | **Seleccionada** (multi-selección futura) | Fondo `primaryContainer` y marca `check_circle_rounded` en `primary` en lugar del artwork | Icono de marca |
 | Pulsada | Capa de pulsado (§17) | Respuesta táctil |
@@ -681,7 +688,7 @@ en el futuro. Dos variantes con el mismo contenido.
 
 **Estados:** pulsada → capa de pulsado sobre el artwork + escala 0.98;
 seleccionada → anillo de 2 px en `primary` alrededor del artwork y marca
-`check_circle_rounded` en la esquina; sonando → `PlayingBars` en la esquina
+`check_circle_rounded` en la esquina; sonando → `TakiPlayingIndicator` en la esquina
 inferior del artwork.
 
 ---
@@ -801,7 +808,7 @@ componente (no cambian su color de fondo).
 | **Default** | Tokens del componente | — |
 | **Pressed** | Capa de `textPrimary` al 10 %; sobre fondos naranjas, `primaryPressed`. Las tarjetas y el botón primario además escalan a 0.98 | Respuesta táctil inmediata (≤ 100 ms) |
 | **Selected** | Fondo `primaryContainer` o anillo `primary` | Marca `check_circle_rounded` |
-| **Active** (toggle encendido, pestaña actual, canción que suena) | Icono o texto en `primary` | Variante de icono (relleno), círculo `primaryContainer` (aleatorio, repetir) o indicador (`PlayingBars`, píldora) |
+| **Active** (toggle encendido, pestaña actual, canción que suena) | Icono o texto en `primary` | Variante de icono (relleno), círculo `primaryContainer` (aleatorio, repetir) o indicador (`TakiPlayingIndicator`, píldora) |
 | **Focused** (teclado, D-pad, accesibilidad) | Anillo de 2 px en `primary` (en `textPrimary` sobre componentes naranjas), a 2 px del componente | El anillo |
 | **Disabled** | Contenido al 38 %, contenedor al 12 %; no responde | Semántica `enabled: false` |
 | **Loading** | Spinner del tamaño del icono que sustituye; el componente mantiene su tamaño | Semántica "Cargando" |
@@ -848,12 +855,12 @@ Rápido, natural y funcional: una animación existe solo si explica un cambio
 | Transiciones de página | Entre pestañas: ninguna. Pantallas del reproductor: suben desde abajo (actual). Detalle (playlist, futuros álbum y artista): entrada lateral estándar de Android |
 | Bottom sheets | Suben con `motionMedium`; el scrim aparece con fundido |
 | Mini player | Aparece la primera vez que suena algo: subida de 16 px + fundido, `motionMedium`. Al cambiar de canción: fundido cruzado del contenido, sin mover el contenedor |
-| Estado de reproducción | Play ↔ pausa con fundido y escala (`motionShort`); `PlayingBars` en bucle de 900 ms solo mientras suena, quietas en pausa (actual) |
+| Estado de reproducción | Play ↔ pausa con fundido y escala (`motionShort`); `TakiPlayingIndicator` en bucle de 900 ms solo mientras suena, quietas en pausa (actual) |
 | Favorito | Al marcar: el corazón escala 1 → 1.2 → 1 y se rellena (`motionShort`). Al desmarcar: solo fundido |
 | Carga | Los indicadores aparecen tras 300 ms de espera (si carga antes, no se ven); el contenido entra con fundido |
 
 **Movimiento reducido:** si el sistema pide reducir animaciones, los
-desplazamientos se sustituyen por fundidos y `PlayingBars` queda quieta
+desplazamientos se sustituyen por fundidos y `TakiPlayingIndicator` queda quieta
 (sigue marcando la canción, porque la barra es visible aunque no se mueva).
 
 ---
@@ -892,7 +899,7 @@ desplazamientos se sustituyen por fundidos y `PlayingBars` queda quieta
 | Estado | Señal de color | Señal adicional obligatoria |
 |---|---|---|
 | Favorito | `primary` | Corazón relleno vs contorno; semántica "Favorita" / `toggled` |
-| Sonando | Título en `primary` | `PlayingBars` visible; semántica "Reproduciendo" |
+| Sonando | Título en `primary` | `TakiPlayingIndicator` visible; semántica "Reproduciendo" |
 | Seleccionado | `primaryContainer` | Marca de verificación; semántica `selected` |
 | Toggle activo (aleatorio, repetir) | `primary` | Círculo `primaryContainer` detrás del icono ("repetir una" con su icono); semántica `toggled` / valor |
 | Deshabilitado | 38 % | Semántica `enabled: false` |
@@ -1235,7 +1242,8 @@ migrada; solo cambia la presentación.
   debajo, el resumen en `trackSubtitle` / `textSecondary` y Reproducir
   (`TakiButton` primario) y Aleatorio (secundario), con icono, en un `Wrap`:
   con texto grande Aleatorio baja de línea. Sustituyen a
-  `PlayShuffleButtons`, que sigue en uso en el detalle de playlist.
+  `PlayShuffleButtons` (que entonces seguía en uso en el detalle de
+  playlist; eliminado en la Fase 1.7E).
 - **Estados:** sin permiso → `TakiErrorState` de permiso (mismos textos;
   "Permitir acceso" / "Abrir ajustes" con `requestPermission`); error de la
   base o de la biblioteca → `TakiErrorState` con Reintentar
@@ -1305,8 +1313,8 @@ y su menú ⋮ (Renombrar / Eliminar playlist) siguen siendo Material.
 - **Reproducir / Aleatorio:** `TakiButton` primario y secundario con icono,
   en un `Wrap` (con texto grande Aleatorio baja de línea); deshabilitados
   si la playlist no tiene canciones visibles. Sustituyen a
-  `PlayShuffleButtons`, que se queda sin consumidores (se borra en una
-  fase de limpieza; está en `core/widgets`).
+  `PlayShuffleButtons`, que quedó sin consumidores y se eliminó en la
+  Fase 1.7E.
 - **Filas:** `TakiSongTile` con duración, ⋯ (`onMore`) y el asa de arrastre
   en `trailing` (48, tooltip "Arrastrar para reordenar"), como en la Cola.
   Tocar reproduce la lista visible desde esa fila; mantener pulsado y ⋯
@@ -1345,8 +1353,8 @@ y su menú ⋮ (Renombrar / Eliminar playlist) siguen siendo Material.
   Con texto al 150 % a 360 px, ⋯ y el asa (96) dejan poco ancho al título,
   que se recorta pronto. Barra
   superior, menú ⋮, diálogos y el sheet de acciones siguen en Material.
-  `PlayShuffleButtons` y `PlaylistCover` (este aún en el sheet "Añadir a una
-  playlist") quedan para la limpieza.
+  `PlaylistCover` (aún en el sheet "Añadir a una playlist") queda para la
+  limpieza; `PlayShuffleButtons` ya se eliminó en la Fase 1.7E.
 
 **Para cada paso:**
 

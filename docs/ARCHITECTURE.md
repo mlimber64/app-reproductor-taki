@@ -30,8 +30,8 @@ lib/
 │   │   └── services/             SongMatcher
 │   ├── artwork/                  ArtworkCache y providers de carátulas
 │   ├── theme/                    AppColors (tokens visuales)
-│   ├── widgets/                  ArtworkImage, SongTile, PlayShuffleButtons,
-│   │                             MessageView, PlaceholderPage, song_actions
+│   ├── widgets/                  Taki* (Design System), ArtworkImage,
+│   │                             PlaceholderPage, song_actions
 │   ├── database/                 TakiDatabase (taki.db) y takiDatabaseProvider
 │   ├── constants/                LibraryConstants
 │   ├── utils/                    duration_format, LruCache
@@ -229,11 +229,17 @@ Son tokens: no construye temas. `AppTheme` (en `app/`) compone el
 | Widget | Uso |
 |---|---|
 | `ArtworkImage` | Carátula con esquinas redondeadas; lee `artworkCacheProvider`. Recibe `albumId`, `size`, `borderRadius` |
-| `SongTile` | Fila de canción (carátula, título, artista, duración), alto fijo 64. Recibe `song`, `isCurrent`, `onTap`, `onLongPress`, `trailing` |
-| `PlayShuffleButtons` | Botones Reproducir/Aleatorio; recibe los callbacks |
-| `MessageView` | Estado vacío/error/permiso con acción y pull-to-refresh opcionales |
+| `Taki*` (`TakiSongTile`, `TakiButton`, `TakiEmptyState`, `TakiErrorState`, `TakiPlaylistCard`, `TakiArtwork`, …) | Componentes del Design System: solo presentación, reciben datos y callbacks. Ver `DESIGN_SYSTEM.md` §21 |
 | `PlaceholderPage` | Pantalla provisional (la usa Ajustes) |
 | `song_actions.dart` | `ExtraSongAction` (acción extra de una pantalla) y el typedef `ShowSongActions`, la firma del menú de canción que implementa `app/` |
+
+`ArtworkImage` solo lo usa ya `PlaylistCover` (el sheet "Añadir a una
+playlist"); se retirará con esa migración.
+
+**Reemplazados** (eliminados en la Fase 1.7E, sin consumidores): `SongTile` →
+`TakiSongTile`; `PlayShuffleButtons` → `TakiButton` (Reproducir primario,
+Aleatorio secundario); `MessageView` → `TakiEmptyState` / `TakiErrorState`;
+`PlayingBars` (de `features/player`) → `TakiPlayingIndicator`.
 
 Un widget de `core/widgets` no debe importar ninguna feature ni `app/`. Si
 necesita datos de una feature, los recibe por parámetro o mediante un port de
