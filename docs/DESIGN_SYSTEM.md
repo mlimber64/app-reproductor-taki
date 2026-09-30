@@ -1220,6 +1220,36 @@ migrada; Favoritos todavía no.
   muy grande puede desbordar (con las fuentes reales, las de estos estados
   caben al 200 %). Sin filtros ni búsqueda (no existían).
 
+**Estado de Favoritos (Fase 1.7B, completa el paso 4):** `FavoritesPage`
+migrada; solo cambia la presentación.
+
+- **Filas:** `TakiSongTile` con duración, en el orden de
+  `favoriteSongsProvider` (más recientes primero; la pantalla no reordena).
+  Sin ⋯ ni corazón (aquí todas son favoritas, §8) y sin "No disponible" (las
+  que faltan en el teléfono no aparecen). Tocar reproduce los favoritos desde
+  esa fila y mantener pulsado abre el mismo menú de acciones. Lista perezosa
+  con `SliverPrototypeExtentList`, como la Biblioteca.
+- **Canción actual:** estado sonando/en pausa de `TakiSongTile`, como en la
+  Biblioteca (I2 resuelto también aquí).
+- **Cabecera:** la barra "Favoritos" (encabezado) sigue siendo la del tema;
+  debajo, el resumen en `trackSubtitle` / `textSecondary` y Reproducir
+  (`TakiButton` primario) y Aleatorio (secundario), con icono, en un `Wrap`:
+  con texto grande Aleatorio baja de línea. Sustituyen a
+  `PlayShuffleButtons`, que sigue en uso en el detalle de playlist.
+- **Estados:** sin permiso → `TakiErrorState` de permiso (mismos textos;
+  "Permitir acceso" / "Abrir ajustes" con `requestPermission`); error de la
+  base o de la biblioteca → `TakiErrorState` con Reintentar
+  (`retryFavorites`); vacío → `TakiEmptyState` de primer uso
+  (`favorite_border_rounded`, "Sin favoritos", sin acción). Solo la lista y
+  el vacío tienen pull-to-refresh, como antes. La carga sigue siendo el
+  spinner y, con `skipLoadingOnReload`, un recálculo mantiene la lista.
+- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` a 48.
+- **Huecos:** el adaptador de carátulas es una copia del de la Biblioteca
+  (ver 1.6E). `TakiButton` no recorta su texto: al 150 % con la fuente de
+  pruebas no cabe "Permitir acceso" (con las fuentes reales sí). La carga es
+  el spinner genérico, sin componente Taki. El resumen no es un
+  `TakiSectionHeader` (no encaja: no hay título de sección).
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.
