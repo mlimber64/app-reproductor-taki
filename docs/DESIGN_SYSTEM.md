@@ -1250,6 +1250,47 @@ migrada; solo cambia la presentación.
   el spinner genérico, sin componente Taki. El resumen no es un
   `TakiSectionHeader` (no encaja: no hay título de sección).
 
+**Estado de Playlists — Fase 1.7C-1 (paso 5, lista principal):**
+`PlaylistsPage` migrada; el detalle (`PlaylistDetailPage`), el sheet "Añadir
+a una playlist" y los diálogos siguen como estaban.
+
+- **Tarjetas:** `TakiPlaylistCard` (fila de §12, chevron) en lugar de
+  `_PlaylistRow` + `PlaylistCover`. Tocar abre el detalle (`onOpenPlaylist`)
+  y mantener pulsado abre el mismo sheet Renombrar / Eliminar, con la pista
+  "Renombrar o eliminar". El resumen va entero en `subtitle`
+  (`formatSongsSummary`) y `songCount` no se pasa: así se conserva
+  "0 canciones" y el conteo de la base (que incluye canciones ausentes).
+  Mismo orden que `playlistsProvider` (la modificada más reciente primero).
+- **Portada:** `TakiArtwork.mosaic` (`kind: playlist`). La página elige hasta
+  4 álbumes distintos de `coverSongIds` → `libraryAlbumIdsProvider`, como
+  antes; vacía → mosaico sin imágenes (placeholder con borde); con canciones
+  pero sin carátulas → una pieza sin imagen.
+- **Grupo:** `TakiSectionHeader` de grupo ("Tus playlists", se muestra
+  "TUS PLAYLISTS"; encabezado semántico).
+- **Nueva playlist:** `TakiButton` secundario con icono (48), alineado al
+  inicio con su ancho natural: el área táctil es la píldora visible (la
+  lista da a cada elemento todo el ancho; un `Align` lo afloja). No hay
+  equivalente Taki del botón de borde
+  discontinuo (64) y no se crea uno. Mismo flujo: diálogo → crear → abrir el
+  detalle; si falla, "No se pudo crear la playlist".
+- **Estados:** sin playlists → `TakiEmptyState` de primer uso en línea, bajo
+  "Nueva playlist" y sin acción propia (no repite la de arriba); error →
+  `TakiErrorState` con Reintentar (`retryPlaylists`), sin pull-to-refresh.
+  La carga sigue siendo el spinner (`skipLoadingOnReload`). Sin estado de
+  permiso (no lo había).
+- **Huecos:** `TakiPlaylistCard` con `songCount: 0` diría "Vacía"; aquí se
+  evita pasando el resumen como `subtitle`, sin cambiar el componente.
+  `TakiButton` no recorta su texto: con la fuente de pruebas (cada letra tan
+  ancha como alta) "Nueva playlist" no cabe a 360 px con el texto al 150 %
+  (con las fuentes reales sí). `TakiButton` no tiene variante de ancho
+  completo: si recibe restricciones ajustadas, su área táctil las ocupa
+  pero la píldora (dentro del `Stack` de `TakiFocusRing`) se dibuja a su
+  ancho natural; quien lo use debe aflojarlas. Tercera copia del adaptador
+  bytes →
+  `MemoryImage` (ver 1.6E), aquí para varias carátulas. El sheet de acciones
+  de la playlist, el sheet "Añadir a una playlist" y los diálogos siguen en
+  Material. `PlaylistCover` sigue en uso en el detalle y en el sheet.
+
 **Para cada paso:**
 
 - `flutter test`, `flutter analyze` y el test de arquitectura en verde.

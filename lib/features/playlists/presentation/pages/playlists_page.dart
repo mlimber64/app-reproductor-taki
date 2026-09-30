@@ -1,15 +1,20 @@
-import 'dart:ui' show PathMetric;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/artwork/artwork_cache.dart';
+import '../../../../core/artwork/artwork_providers.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/taki_spacing.dart';
 import '../../../../core/utils/duration_format.dart';
-import '../../../../core/widgets/message_view.dart';
+import '../../../../core/widgets/taki_button.dart';
+import '../../../../core/widgets/taki_empty_state.dart';
+import '../../../../core/widgets/taki_error_state.dart';
+import '../../../../core/widgets/taki_playlist_card.dart';
+import '../../../../core/widgets/taki_section_header.dart';
 import '../../domain/entities/playlist.dart';
 import '../providers/playlists_providers.dart';
 import '../widgets/delete_playlist_dialog.dart';
-import '../widgets/playlist_cover.dart';
 import '../widgets/playlist_name_dialog.dart';
 
 class PlaylistsPage extends ConsumerWidget {
@@ -109,34 +114,51 @@ class PlaylistsPage extends ConsumerWidget {
       body: playlists.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => MessageView(
-          icon: Icons.error_outline_rounded,
+        // Sin pull-to-refresh, como antes.
+        error: (_, _) => TakiErrorState(
           title: 'Playlists no disponibles',
           message: 'No pudimos leer tus playlists guardadas.',
-          actionLabel: 'Reintentar',
-          onAction: () => retryPlaylists(ref),
+          action: TakiStateAction(
+            label: 'Reintentar',
+            onPressed: () => retryPlaylists(ref),
+          ),
         ),
         data: (list) => ListView.builder(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: TakiSpacing.lg),
           itemCount: list.length + 2,
           itemBuilder: (context, index) {
             if (index == 0) {
               return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: const EdgeInsets.fromLTRB(
+                  TakiSpacing.pageGutter,
+                  TakiSpacing.sm,
+                  TakiSpacing.pageGutter,
+                  0,
+                ),
                 child: _NewPlaylistButton(
                   onPressed: () => _create(context, ref),
                 ),
               );
             }
             if (index == 1) {
+              // "Nueva playlist" ya está arriba: el vacío no repite la acción.
               return list.isEmpty
-                  ? const _EmptyPlaylists()
-                  : const _SectionLabel('TUS PLAYLISTS');
+                  ? const TakiEmptyState(
+                      icon: Icons.queue_music_rounded,
+                      title: 'Sin playlists',
+                      description: 'Aún no tienes playlists. Crea la primera '
+                          'para agrupar tus canciones.',
+                    )
+                  : const TakiSectionHeader(
+                      // El grupo se muestra en MAYÚSCULAS: "TUS PLAYLISTS".
+                      title: 'Tus playlists',
+                      variant: TakiSectionHeaderVariant.group,
+                    );
             }
             final playlist = list[index - 2];
             return _PlaylistRow(
               playlist: playlist,
-              albumIds: [for (final id in playlist.coverSongIds) albumIds[id]],
+              albumIds: _coverAlbums(playlist, albumIds),
               onTap: () => onOpenPlaylist(playlist.id),
               onLongPress: () => _showActions(context, ref, playlist),
             );
@@ -145,10 +167,20 @@ class PlaylistsPage extends ConsumerWidget {
       ),
     );
   }
+
+  /// Álbumes distintos de las primeras canciones, en orden (hasta 4): con 4,
+  /// mosaico; con menos, la primera carátula.
+  static List<int> _coverAlbums(Playlist playlist, Map<int, int?> albumIds) {
+    return <int>{
+      for (final songId in playlist.coverSongIds) ?albumIds[songId],
+    }.take(4).toList();
+  }
 }
 
 enum _PlaylistAction { rename, delete }
 
+/// "Nueva playlist": `TakiButton` secundario con icono (sin equivalente Taki
+/// del borde discontinuo anterior), alineado al inicio.
 class _NewPlaylistButton extends StatelessWidget {
   const _NewPlaylistButton({required this.onPressed});
 
@@ -156,130 +188,22 @@ class _NewPlaylistButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const radius = BorderRadius.all(Radius.circular(16));
-
-    return Semantics(
-      button: true,
-      child: CustomPaint(
-        painter: _DashedBorderPainter(color: AppColors.border, radius: 16),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: radius,
-          child: InkWell(
-            borderRadius: radius,
-            onTap: onPressed,
-            child: SizedBox(
-              height: 64,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_rounded, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Nueva playlist',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    // La lista da a cada elemento todo el ancho; sin aflojarlo, el área
+    // táctil del botón se extendería más allá de la píldora visible.
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: TakiButton(
+        label: 'Nueva playlist',
+        icon: Icons.add_rounded,
+        variant: TakiButtonVariant.secondary,
+        onPressed: onPressed,
       ),
     );
   }
 }
 
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({required this.color, required this.radius});
-
-  final Color color;
-  final double radius;
-
-  static const double _dash = 6;
-  static const double _gap = 4;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final border = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(radius),
-        ).deflate(0.75),
-      );
-    for (final PathMetric metric in border.computeMetrics()) {
-      for (var d = 0.0; d < metric.length; d += _dash + _gap) {
-        canvas.drawPath(metric.extractPath(d, d + _dash), paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
-      color != oldDelegate.color || radius != oldDelegate.radius;
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontSize: 12,
-              letterSpacing: 1.2,
-              color: AppColors.textSecondary,
-            ),
-      ),
-    );
-  }
-}
-
-class _EmptyPlaylists extends StatelessWidget {
-  const _EmptyPlaylists();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 48, 32, 0),
-      child: Column(
-        children: [
-          Icon(
-            Icons.queue_music_rounded,
-            size: 56,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Aún no tienes playlists. Crea la primera para agrupar tus '
-            'canciones.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+/// Una playlist como [TakiPlaylistCard]. El resumen se pasa entero como
+/// `subtitle` para conservar "0 canciones" (la tarjeta diría "Vacía").
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
     required this.playlist,
@@ -289,68 +213,100 @@ class _PlaylistRow extends StatelessWidget {
   });
 
   final Playlist playlist;
-  final List<int?> albumIds;
+  final List<int> albumIds;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final isEmpty = playlist.songCount == 0;
 
-    return Semantics(
-      onLongPressHint: 'Renombrar o eliminar',
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: SizedBox(
-          height: 68,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                PlaylistCover(
-                  albumIds: albumIds,
-                  isEmpty: playlist.songCount == 0,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        playlist.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodyLarge?.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        formatSongsSummary(
-                          playlist.songCount,
-                          playlist.totalDuration,
-                        ),
-                        style: textTheme.bodyMedium?.copyWith(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.textSecondary,
-                ),
-              ],
+    return MergeSemantics(
+      child: Semantics(
+        onLongPressHint: 'Renombrar o eliminar',
+        child: _PlaylistArtwork(
+          // Vacía: sin imágenes (placeholder con borde). Con canciones pero
+          // sin carátulas: una pieza sin imagen.
+          albumIds: isEmpty ? const [] : albumIds,
+          builder: (images) => TakiPlaylistCard(
+            title: playlist.name,
+            artwork: isEmpty || images.isNotEmpty ? images : const [null],
+            subtitle: formatSongsSummary(
+              playlist.songCount,
+              playlist.totalDuration,
             ),
+            onTap: onTap,
+            onLongPress: onLongPress,
           ),
         ),
       ),
     );
+  }
+}
+
+/// Resuelve las carátulas de la portada con [ArtworkCache] (bytes →
+/// `MemoryImage`), como la Biblioteca y Favoritos (adaptador repetido: ver
+/// docs/DESIGN_SYSTEM.md, Fase 1.7C-1).
+class _PlaylistArtwork extends ConsumerStatefulWidget {
+  const _PlaylistArtwork({required this.albumIds, required this.builder});
+
+  final List<int> albumIds;
+  final Widget Function(List<ImageProvider?> images) builder;
+
+  @override
+  ConsumerState<_PlaylistArtwork> createState() => _PlaylistArtworkState();
+}
+
+class _PlaylistArtworkState extends ConsumerState<_PlaylistArtwork> {
+  List<ArtworkKey> _keys = const [];
+  final Map<ArtworkKey, Uint8List?> _bytes = {};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_PlaylistArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.albumIds, widget.albumIds)) _resolve();
+  }
+
+  void _resolve() {
+    final size =
+        (TakiPlaylistCard.artworkSize * MediaQuery.devicePixelRatioOf(context))
+            .round();
+    final keys = [
+      for (final albumId in widget.albumIds) (albumId: albumId, size: size),
+    ];
+    if (listEquals(keys, _keys)) return;
+    _keys = keys;
+    _bytes.removeWhere((key, _) => !keys.contains(key));
+
+    final cache = ref.read(artworkCacheProvider);
+    for (final key in keys) {
+      if (_bytes.containsKey(key)) continue;
+      if (cache.contains(key)) {
+        _bytes[key] = cache.peek(key);
+        continue;
+      }
+      cache.load(key).then((bytes) {
+        if (mounted && _keys.contains(key)) {
+          setState(() => _bytes[key] = bytes);
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder([
+      for (final key in _keys)
+        switch (_bytes[key]) {
+          final bytes? when bytes.isNotEmpty => MemoryImage(bytes),
+          _ => null,
+        },
+    ]);
   }
 }
