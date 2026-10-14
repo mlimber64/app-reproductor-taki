@@ -7,11 +7,12 @@
 > Documentos relacionados: [ARCHITECTURE.md](ARCHITECTURE.md) (dónde vive cada
 > pieza de código).
 
-Taki es hoy un reproductor de música **local** para Android, en español y en
-modo oscuro. Este sistema define su lenguaje visual para lo que existe hoy
-(Biblioteca, Favoritos, Playlists, Reproduciendo, Cola) y para lo que podría
-existir más adelante (artistas, álbumes, géneros, búsqueda, discovery,
-contenido online) sin tener que inventar otro lenguaje.
+Taki es hoy un reproductor de música para Android (biblioteca local y, con
+credencial, catálogo remoto de Jamendo), en español y en modo oscuro. Este
+sistema define su lenguaje visual para lo que existe hoy (Biblioteca, Buscar,
+Favoritos, Playlists, Reproduciendo, Cola) y para lo que podría existir más
+adelante (artistas, álbumes, géneros, discovery, más fuentes) sin tener que
+inventar otro lenguaje.
 
 ---
 
@@ -28,6 +29,7 @@ contenido online) sin tener que inventar otro lenguaje.
 - [7. Artwork](#7-artwork)
 - [8. TakiSongTile](#8-takisongtile)
 - [9. Botones](#9-botones)
+- [9b. TakiSearchField](#9b-takisearchfield)
 - [10. TakiMiniPlayer](#10-takiminiplayer)
 - [11. Reproduciendo](#11-reproduciendo)
 - [12. TakiPlaylistCard](#12-takiplaylistcard)
@@ -51,20 +53,22 @@ contenido online) sin tener que inventar otro lenguaje.
 Inventario de partida, **anterior a la migración**. `SongTile`,
 `PlayShuffleButtons`, `MessageView` y `PlayingBars` se sustituyeron por
 `TakiSongTile`, `TakiButton`, `TakiEmptyState` / `TakiErrorState` y
-`TakiPlayingIndicator`, y se eliminaron en la Fase 1.7E.
+`TakiPlayingIndicator`, y se eliminaron en la Fase 1.7E. `ArtworkImage` y
+`PlaylistCover` se sustituyeron por `TakiArtwork` y `AlbumArtworkBuilder`
+(`core/artwork/`) y se eliminaron en las Fases 1.8A–1.8M.
 
 | Pieza | Dónde | Qué hace |
 |---|---|---|
-| `AppColors` | `lib/core/theme/app_colors.dart` | Paleta "Medianoche + ámbar": fondo `#111318`, surface `#1B1E26`, surfaceElevated `#1F232D`, border `#2A2E39`, texto `#F2F0EB` / `#A3A6B0`, acento ámbar `#F5A524` |
+| `AppColors` · *eliminado en 1.9B* | `lib/core/theme/app_colors.dart` | *(Valores de entonces, sustituidos por `TakiColors`, §1.)* Paleta "Medianoche + ámbar": fondo `#111318`, surface `#1B1E26`, surfaceElevated `#1F232D`, border `#2A2E39`, texto `#F2F0EB` / `#A3A6B0`, acento ámbar `#F5A524` |
 | `AppTheme` | `lib/app/theme/app_theme.dart` | `ThemeData` Material 3 oscuro; Sora (display/headline/title) y DM Sans (resto), empaquetadas como fuentes de la app (`fonts:` en `pubspec.yaml`, Fase 1.2); tamaño táctil mínimo 48 |
-| `ArtworkImage` | `lib/core/widgets/` | Carátula cuadrada con radio, caché LRU, placeholder con nota musical |
+| `ArtworkImage` · *eliminado en 1.8* | `lib/core/widgets/` | Carátula cuadrada con radio, caché LRU, placeholder con nota musical |
 | `SongTile` · *eliminado en 1.7E* | `lib/core/widgets/` | Fila de 64 px: carátula 48, título, artista, duración |
 | `PlayShuffleButtons` · *eliminado en 1.7E* | `lib/core/widgets/` | Botones "Reproducir" (acento) y "Aleatorio" (surface + borde), en píldora de 48 |
 | `MessageView` · *eliminado en 1.7E* | `lib/core/widgets/` | Estado vacío / error / permiso: icono 56 en acento, título, texto, botón |
 | `MiniPlayer` | `features/player/.../widgets/` | Tarjeta de 64 px sobre la barra inferior, radio 16, barra de progreso de 3 px |
 | `NowPlayingPage` | `features/player/.../pages/` | Carátula grande (radio 24, sombra), título 24, controles, seek, botón "Cola" |
 | `PlayingBars` · *eliminado en 1.7E* | `features/player/.../widgets/` | Ecualizador de 3 barras que marca la canción que suena en la Cola |
-| `PlaylistCover` | `features/playlists/.../widgets/` | Portada 2×2 o carátula única; icono de lista si está vacía |
+| `PlaylistCover` · *eliminado en 1.8* | `features/playlists/.../widgets/` | Portada 2×2 o carátula única; icono de lista si está vacía |
 
 El ícono de la app (`android/app/src/main/res/mipmap-*`) usa un fondo
 medianoche violáceo (`#111139`) y un degradado que va de naranja (`#FBA356`,
@@ -77,13 +81,15 @@ naranja de este sistema sale del extremo cálido de ese degradado.
 - **Tipografías:** Sora + DM Sans. Cumplen el objetivo (Sora es geométrica y
   con carácter para títulos; DM Sans es muy legible en tamaños pequeños). No
   se añade ninguna fuente.
-- **Estructura de tokens:** `AppColors` en `core/theme` y `AppTheme` en
+- **Estructura de tokens:** los tokens en `core/theme` (hoy `TakiColors` y el resto de
+  tokens Taki; antes `AppColors`, eliminado en la Fase 1.9B) y `AppTheme` en
   `app/theme` ya siguen la separación tokens / composición del tema.
 - **Componentes:** `ArtworkImage`, `SongTile`, `PlayShuffleButtons`,
   `MessageView`, `MiniPlayer`, `PlayingBars` y `PlaylistCover` son la base de
   los componentes `Taki*` del [inventario](#21-inventario-de-componentes)
   (`SongTile`, `PlayShuffleButtons`, `MessageView` y `PlayingBars` ya se
-  eliminaron, en la Fase 1.7E).
+  eliminaron, en la Fase 1.7E; `ArtworkImage` y `PlaylistCover`, en las
+  Fases 1.8A–1.8M).
 - **Decisiones que ya son correctas:** tamaño táctil de 48, tooltips en todos
   los botones de icono, `Semantics(toggled:)` en aleatorio, cifras tabulares
   en duraciones, iconos de la familia *rounded*, transición de pantalla
@@ -96,15 +102,15 @@ naranja de este sistema sale del extremo cálido de ese degradado.
 | I1 | Alta · **Resuelta en Fase 1.2** | **Las fuentes no llegaban a la build de release.** `google_fonts` las descargaba en tiempo de ejecución, no estaban incluidas como assets y el `AndroidManifest.xml` principal no declara `INTERNET` (solo los de debug y profile). En release la app usaba la fuente de respaldo del sistema. Ahora van empaquetadas (ver §2.1) y `google_fonts` se retiró | `pubspec.yaml` (`fonts:`), `assets/fonts/` |
 | I2 | Media · **Resuelta en 1.7A–1.7C-2** | La canción que suena se marca **solo con color** (título en acento) en Biblioteca, Favoritos y el detalle de playlist. La Cola sí añade `PlayingBars` | `core/widgets/song_tile.dart` (eliminado en 1.7E) |
 | I3 | Media | Aleatorio y "repetir todo" activos se distinguen **solo por color** (acento vs gris); "repetir una" sí cambia de icono | `now_playing_page.dart` (`toggleColor`) |
-| I4 | Media | Seis radios distintos para elementos parecidos: 10, 12, 14, 16, 24 y píldora | `artwork_image`, `queue_page`, `mini_player`, `app_theme`, `now_playing_page` |
+| I4 | Media | Seis radios distintos para elementos parecidos: 10, 12, 14, 16, 24 y píldora | `artwork_image` (eliminado en 1.8), `queue_page`, `mini_player`, `app_theme`, `now_playing_page` |
 | I5 | Media | Tamaños de fuente fijados a mano con `copyWith(fontSize:)` (11, 12, 13, 14, 15, 20, 24, 26) en lugar de roles con nombre. El mismo rol cambia entre pantallas: título de canción 15 en listas y 14 en el mini player; "eyebrow" 11/1.5 en Reproduciendo y 12/1.2 en Playlists y Cola | varias páginas |
 | I6 | Media · **Resuelta en 1.7A–1.7C-2** | `MessageView` pinta igual el vacío, el error y el permiso (icono siempre en acento): un error no se distingue de "aún no tienes favoritos" | `core/widgets/message_view.dart` (eliminado en 1.7E) |
 | I7 | Baja | Márgenes laterales mezclados: 16 (listas), 20 (Cola, sheets), 24 (Reproduciendo), 32 (estados vacíos) | páginas |
-| I8 | Baja | Alturas de fila 64 y 68, y carátulas de 44, 48, 52 y 128 para funciones muy parecidas | `song_tile`, `playlists_page`, `queue_page`, `mini_player`, `playlist_cover` |
+| I8 | Baja | Alturas de fila 64 y 68, y carátulas de 44, 48, 52 y 128 para funciones muy parecidas | `song_tile`, `playlists_page`, `queue_page`, `mini_player`, `playlist_cover` (eliminado en 1.8) |
 | I9 | Baja | El botón de reproducir es un círculo **blanco** en el mini player y **ámbar** en Reproduciendo, sin una regla documentada | `mini_player.dart`, `now_playing_page.dart` |
-| I10 | Baja | `surface` y `surfaceElevated` casi no se distinguen (contraste entre ellos 1.06:1) | `app_colors.dart` |
+| I10 | Baja | `surface` y `surfaceElevated` casi no se distinguen (contraste entre ellos 1.06:1) | `app_colors.dart` (eliminado en 1.9B) |
 | I11 | Baja | No hay colores semánticos de error, éxito o aviso; el error sale del `ColorScheme.fromSeed` por defecto. Tampoco hay tema de SnackBar (se usa el claro por defecto de Material 3) | `app_theme.dart` |
-| I12 | Baja | Tokens sin uso: `accentCoral`, `accentBlue`, `accentMint` y el parámetro `accent` de `AppTheme.dark()` | `app_colors.dart`, `app_theme.dart` |
+| I12 | Baja · **Parcialmente resuelta en 1.9B** | Tokens sin uso: `accentCoral`, `accentBlue`, `accentMint` (se eliminaron con `AppColors` en 1.9B) y el parámetro `accent` de `AppTheme.dark()` (sigue pendiente) | `app_colors.dart` (eliminado), `app_theme.dart` |
 | I13 | Baja · **Resuelta en 1.7A** | `SongTile` tiene alto fijo (64) y la Biblioteca usa `SliverFixedExtentList`: con texto grande (200 %) el contenido puede no caber | `library_page.dart`, `song_tile.dart` (eliminado en 1.7E) |
 | I14 | Baja | Reproduciendo muestra "REPRODUCIENDO DESDE Biblioteca" siempre, y su botón "Más opciones" no hace nada | `now_playing_page.dart:317, 332` |
 | I15 | Baja | Mezcla de variantes de icono fuera de la navegación (`music_off_outlined`, `delete_outline_rounded`, `lock_outline_rounded` junto a `*_rounded` rellenos) | páginas |
@@ -252,11 +258,16 @@ Su comportamiento completo está en [§17](#17-estados-de-interacción).
 
 Nunca en botones, texto, barras de progreso ni fondos de pantalla.
 
-### 1.8 Tokens actuales que se retiran
+### 1.8 Tokens actuales que se retiran (histórico: ya retirados)
 
 `accentCoral`, `accentBlue` y `accentMint` (sin uso, I12) y el ámbar `accent`
 `#F5A524`, que sustituye `primary`. `miniProgressTrack`, `seekTrack` y
 `artworkShadow` pasan a ser tokens de componente (§10, §11, §7).
+
+**Estado:** `AppColors` se eliminó en la Fase 1.9B; `TakiColors` es la fuente
+vigente de los tokens de color. `accentCoral`, `accentBlue`, `accentMint` y el ámbar
+desaparecieron con él; `miniProgressTrack` y `seekTrack` eran alias de `divider` y
+`artworkShadow` es `TakiElevation.artworkShadow`.
 
 ---
 
@@ -467,8 +478,10 @@ No se cambia ningún icono en esta fase.
   > 160 → `radiusXl`. Artistas (futuro): círculo (`radiusFull`), para
   distinguir personas de colecciones.
 - **Origen transparente:** el componente recibe una referencia a la carátula
-  y no sabe si es local (MediaStore, hoy) o remota (futuro). Mismo tamaño,
-  radio, placeholder y transición en ambos casos.
+  y no sabe si es local (MediaStore) o remota (Jamendo). Mismo tamaño,
+  radio, placeholder y transición en ambos casos. Hoy la referencia es un
+  `ImageProvider?` que entrega `AlbumArtworkBuilder` (ver «Estado del
+  artwork».)
 
 ### 7.2 Estados
 
@@ -501,7 +514,10 @@ No se cambia ningún icono en esta fase.
 
 **Playlist:** mosaico 2×2 si las primeras canciones tienen 4 carátulas
 distintas; si no, la carátula de la primera; vacía → placeholder de playlist
-con borde `outline` (comportamiento actual).
+con borde `outline`. Los álbumes se eligen con `playlistCoverAlbumIds` (las
+primeras 4 canciones → álbumes distintos) y se resuelven con
+`PlaylistCoverImages`; `TakiArtwork.mosaic` dibuja el 2×2 solo con 4
+imágenes.
 
 ---
 
@@ -584,6 +600,39 @@ anillo de foco (2 px a 2 px) cabe justo en esos 48. Solo admite iconos
 (capa `pressedOverlay` encima y escala 0.98, sin un color `errorPressed`) y
 con foco (anillo `textPrimary`); deshabilitado, como el primario. La versión
 de texto (`error` sin fondo) se comporta como el terciario.
+
+---
+
+## 9b. TakiSearchField
+
+Campo de búsqueda (Fase 3.2C). Solo presentación: **no** busca ni hace
+debounce; quien lo usa le pasa un `controller` (y opcionalmente un
+`focusNode`) y recibe `onChanged` / `onSubmitted`. `core/widgets/taki_search_field.dart`.
+
+| Parte | Especificación |
+|---|---|
+| Forma | Píldora (`radiusFull`, `StadiumBorder`) |
+| Fondo | `surface` (nivel 1) |
+| Alto | Mínimo 48 (`TakiSearchField.minHeight`); crece con el tamaño de texto |
+| Relleno | 16 a la izquierda; icono → 12 → texto; a la derecha, el botón «Borrar» o 16 |
+| Icono | `search_rounded`, `iconMd`, `iconSecondary` (decorativo, fuera de la semántica) |
+| Texto | `body` en `textPrimary`; cursor `primary` |
+| Pista | `body` en `textMuted` |
+| Teclado | Acción `search` |
+| Sin colores, radios ni espacios nuevos | Solo tokens existentes |
+
+### Estados
+
+| Estado | Regla | Señal no cromática |
+|---|---|---|
+| **Reposo** | Contorno del mismo color que el fondo (invisible) | — |
+| **Foco** | Anillo de 2 px en `focusRing` (`primary`). El contorno es **siempre** de 2 px, así que la fila no se mueve al enfocar | El anillo |
+| **Con texto** | Aparece «Borrar búsqueda» (`TakiIconButton` `subtle`, `close_rounded`, 48 táctil) | El botón |
+| **Borrar** | Vacía el campo, avisa con `onChanged('')` y deja el foco en el campo | — |
+| **Deshabilitado** | Contenido al 38 % (`disabledContentOpacity`), sin botón de borrar, sin anillo | Semántica deshabilitada |
+
+**Accesibilidad:** etiqueta por defecto = la pista (`semanticLabel` la
+sustituye); «Borrar búsqueda» es también su tooltip.
 
 ---
 
@@ -738,8 +787,8 @@ contenido propio de cada caso.
 | Sin favoritos | `favorite_border_rounded` | "Sin favoritos" | — (explica el corazón y la pulsación larga) |
 | Sin playlists | `queue_music_rounded` | "Aún no tienes playlists" | Nueva playlist |
 | Playlist vacía | `playlist_add_rounded` | "Esta playlist está vacía" | — (explica cómo añadir) |
-| Sin resultados de búsqueda (futuro) | `search_off_rounded` | "Sin resultados para «…»" | — |
-| Sin contenido online (futuro) | `cloud_off_rounded` | Según el caso | Reintentar |
+| Sin resultados de búsqueda *(implementado en 3.2C/3.2E)* | `search_off_rounded` | "No encontramos música" · "Prueba con otro título." | — |
+| Búsqueda no disponible *(implementado)* | `cloud_off_rounded` | "Búsqueda no disponible" · "Esta función no está disponible en esta versión." | — |
 
 ---
 
@@ -774,8 +823,9 @@ terciaria, radio `radiusMd`, 8 sobre el mini player o la navegación.
 
 ## 16. Navegación inferior
 
-Hoy: 4 destinos (Biblioteca, Playlists, Favoritos, Ajustes). Esta fase **no**
-los cambia.
+Hoy: 4 destinos (Biblioteca, Playlists, Favoritos, Ajustes) y, **solo si hay
+algún catálogo disponible**, un 5.º: **Buscar** (`search_rounded`), entre
+Biblioteca y Playlists (Fase 3.2C). Sin catálogo, la barra es la de siempre.
 
 | Parte | Especificación |
 |---|---|
@@ -793,8 +843,8 @@ relleno, color y peso de la etiqueta.
 separación) y no la tapa; juntos forman un único bloque inferior. Las listas
 reservan en su final el alto de ese bloque.
 
-**Futuro:** como máximo 5 destinos. Si llegan Buscar o un área online, la
-decisión de qué destino entra o sale es de producto; el estilo no cambia.
+**Máximo 5 destinos.** Buscar ya es el 5.º (Fase 3.2C); un destino nuevo exigiría
+decidir cuál sale (decisión de producto); el estilo no cambia.
 
 ---
 
@@ -954,15 +1004,15 @@ va a `core/`; lo que necesita providers de una feature se queda en ella.
 
 | Componente | Contenido | Ubicación | Parte de |
 |---|---|---|---|
-| `TakiColors` | Tokens de §1 | `core/theme/` | `AppColors` |
+| `TakiColors` | Tokens de §1 | `core/theme/` | `AppColors` (eliminado en 1.9B) |
 | `TakiTypography` | Roles de §2 | `core/theme/` | Escala de `AppTheme._textTheme` |
 | `TakiSpacing` | Escala de §3 | `core/theme/` | — |
 | `TakiRadius` | Radios de §4 | `core/theme/` | — |
-| `TakiElevation` | Niveles de §5, `artworkShadow` (`scrim` está en `TakiColors`) | `core/theme/` | `AppColors.artworkShadow` |
+| `TakiElevation` | Niveles de §5, `artworkShadow` (`scrim` está en `TakiColors`) | `core/theme/` | `AppColors.artworkShadow` (eliminado en 1.9B) |
 | (tema) | `AppTheme` construye el `ThemeData` a partir de los tokens | `app/theme/` | `AppTheme` |
 
-**Implementado en Fase 1.3** (las cinco foundations; la UI aún usa
-`AppColors` y el tema anterior hasta el paso 1 de §22). Representación en
+**Implementado en Fase 1.3** (las cinco foundations; entonces la UI aún usaba
+`AppColors`, eliminado en la Fase 1.9B, y el tema anterior hasta el paso 1 de §22). Representación en
 código:
 
 | Foundation | Archivo | API |
@@ -982,7 +1032,7 @@ documento: si cambia uno de los dos, fallan.
 
 | Componente | Ubicación | Parte de |
 |---|---|---|
-| `TakiArtwork` · **implementado (1.4A)** | `core/widgets/` | `ArtworkImage` + `PlaylistCover` (mosaico, pendiente) |
+| `TakiArtwork` · **implementado (1.4A)** | `core/widgets/` | `ArtworkImage` + `PlaylistCover` (ambos eliminados en 1.8; el mosaico es `TakiArtwork.mosaic`) |
 | `TakiSongTile` · **implementado (1.4B)** | `core/widgets/` | `SongTile` |
 | `TakiButton` (primario, secundario, terciario, destructivo) · **implementado (1.4A)** | `core/widgets/` | `PlayShuffleButtons`, botones del tema |
 | `TakiIconButton` · **implementado (1.4A)** | `core/widgets/` | `_CircleButton`, `_ControlButton` (Reproduciendo) |
@@ -990,15 +1040,17 @@ documento: si cambia uno de los dos, fallan.
 | `TakiPlaylistCard` · **implementado (1.4B), variante fila** | `core/widgets/` (recibe datos, no providers) | `_PlaylistRow` (Playlists) |
 | `TakiEmptyState` · **implementado (1.4B)** | `core/widgets/` | `MessageView` (casos vacíos) |
 | `TakiErrorState` · **implementado (1.4B)** | `core/widgets/` | `MessageView` (casos de error y permiso) |
+| `TakiSearchField` · **implementado (3.2C)** | `core/widgets/` | — (componente nuevo; lo usa la pantalla Buscar) |
 | `TakiMiniPlayer` · **implementado (1.4B), en el App Shell (1.6E)** | `core/widgets/`: presentacional, recibe estado y callbacks; lo conecta con los providers del reproductor la feature `player` | `MiniPlayer` |
 | `TakiPlayingIndicator` · **implementado (1.4B)** | `core/widgets/` | `PlayingBars` (lo necesitan filas y tarjetas de todas las features) |
 
-**API de los componentes implementados (Fase 1.4A).** Coexisten con los
-widgets actuales; ninguna pantalla los usa todavía.
+**API de los componentes implementados (Fase 1.4A).** Entonces coexistían
+con los widgets anteriores y ninguna pantalla los usaba (histórico); hoy las
+pantallas ya están migradas.
 
 | Componente | API |
 |---|---|
-| `TakiArtwork` | `size`, `image` (`ImageProvider?`), `kind` (`song`, `playlist`, `artist`, `genre`), `hero`, `semanticLabel`. Solo presentación; la carátula local llega como `AlbumArtworkImage` (`core/artwork/`), que lee la `ArtworkCache` existente |
+| `TakiArtwork` | `size`, `image` (`ImageProvider?`), `kind` (`song`, `playlist`, `artist`, `genre`), `hero`, `semanticLabel`. Solo presentación; la carátula local llega como `ImageProvider?` desde `AlbumArtworkBuilder` (`core/artwork/`: `ArtworkCache` → `MemoryImage` + `ResizeImage`) |
 | `TakiIconButton` | `icon`, `semanticLabel` (obligatorio, también tooltip), `onPressed` (`null` = deshabilitado), `variant` (`standard`, `subtle`, `tonal`, `inverse`), `iconSize` (`TakiIconSize`), `selected` + `selectedIcon` (toggle), `tooltip` |
 | `TakiButton` | `label`, `onPressed`, `variant` (`primary`, `secondary`, `tertiary`, `destructive`, `destructiveTertiary`), `icon`, `loading`, `semanticLabel` |
 | `TakiSectionHeader` | `title`, `variant` (`group`, `section`), `subtitle` (solo sección), `action` (`TakiSectionHeaderAction.text` o `.icon`), `isFirst` |
@@ -1062,7 +1114,7 @@ verde y una revisión en dispositivo. Nunca se reescribe toda la UI de golpe.
 
 | Paso | Qué | Cambio visible |
 |---|---|---|
-| **1. Foundations** | `TakiColors`, `TakiTypography`, `TakiSpacing`, `TakiRadius`, `TakiElevation` en `core/theme`. `AppTheme` los consume y define los temas que faltan (SnackBar, slider, indicadores de progreso). Las fuentes ya están empaquetadas (Fase 1.2, I1). `AppColors` queda como alias temporal o se sustituye en el mismo paso | El acento pasa de ámbar a Taki Orange y cambian los niveles de superficie, en un único punto |
+| **1. Foundations** | `TakiColors`, `TakiTypography`, `TakiSpacing`, `TakiRadius`, `TakiElevation` en `core/theme`. `AppTheme` los consume y define los temas que faltan (SnackBar, slider, indicadores de progreso). Las fuentes ya están empaquetadas (Fase 1.2, I1). `AppColors` quedó como alias temporal y se eliminó en la Fase 1.9B | El acento pasa de ámbar a Taki Orange y cambian los niveles de superficie, en un único punto |
 | **2. Componentes compartidos** | `TakiArtwork`, `TakiButton`, `TakiIconButton`, `TakiSongTile`, `TakiSectionHeader`, `TakiEmptyState`, `TakiErrorState`, `TakiPlayingIndicator`, con widget tests y, si se decide, golden tests | Ninguno hasta que las pantallas los usen |
 | **3. Navegación** | Barra inferior (§16) y `TakiMiniPlayer` (§10) como un solo bloque inferior | Indicador, márgenes, play del mini player |
 | **4. Biblioteca** | Biblioteca y Favoritos con `TakiSongTile` (estado "sonando" con barras, I2), cabeceras y estados vacío/error | Marca "sonando", estados vacíos |
@@ -1079,8 +1131,9 @@ verde y una revisión en dispositivo. Nunca se reescribe toda la UI de golpe.
   `surfaceElevated`, radio `md`, 8 sobre el bloque inferior; a los lados el
   margen de página de 16, que §15 no fija) y tooltips (`surfaceHighest`,
   radio `sm`, texto `textPrimary` para que se lea sobre fondo oscuro).
-- `AppColors` es un **alias** de `TakiColors`: las pantallas legacy ya usan
-  la paleta Taki sin tocar su código. Se elimina cuando no quede ningún uso.
+- `AppColors` fue un **alias** temporal de `TakiColors` (las pantallas legacy usaban
+  la paleta Taki sin tocar su código); se eliminó en la Fase 1.9B y
+  `TakiColors` es la fuente vigente de los tokens de color.
 - Tipografía del tema: los estilos de Material con equivalente directo usan
   el rol de §2.2 (`headlineSmall` → `headline`, `titleLarge`,
   `titleMedium`, `bodyLarge`, `bodyMedium` → `body`, `labelLarge` →
@@ -1099,8 +1152,8 @@ verde y una revisión en dispositivo. Nunca se reescribe toda la UI de golpe.
 Taki (`TakiArtwork` hero, `TakiIconButton` para cerrar, más, favorito,
 aleatorio, repetir, anterior y siguiente; `TakiButton` secundario para
 "Cola"). Aleatorio y repetir activos usan los iconos `_on` de §6.2. La
-carátula sigue saliendo de `ArtworkCache` como `MemoryImage` (no de
-`AlbumArtworkImage`). Huecos:
+carátula salía de `ArtworkCache` como `MemoryImage` (histórico; hoy la
+resuelve `AlbumArtworkBuilder`, ver «Estado del artwork»). Huecos:
 
 - **Play/pausa:** círculo de 72 en `primary` que `TakiIconButton` no
   cubre (su contenedor mide 40 y no es naranja); queda como botón propio de
@@ -1167,7 +1220,7 @@ confirmación, cerrar).
   va a su derecha en `caption` / `textMuted`.
 - **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` (como
   Reproduciendo), a 48 px: comparte entradas de caché con las filas de la
-  Biblioteca.
+  Biblioteca. *(Histórico: hoy lo resuelve `AlbumArtworkBuilder`; ver «Estado del artwork».)*
 - **Fila arrastrada:** `surfaceElevated` (nivel 2) con radio `md`, sin la
   sombra de antes (§5).
 - **Huecos:** `TakiSectionHeader` (grupo) no admite metadata a la derecha:
@@ -1189,7 +1242,7 @@ es ahora un adaptador sobre `TakiMiniPlayer`; el App Shell no cambia.
   `trackTitle` / `trackSubtitle` y barra de 2 px en `divider` → `primary`
   (antes 3 px), decorativa: no es un control de seek.
 - Carátula: `ArtworkCache` → bytes → `MemoryImage`, como Reproduciendo y la
-  Cola. Solo la parte que dibuja el componente escucha la posición; la
+  Cola. *(Histórico: hoy lo resuelve `AlbumArtworkBuilder`; ver «Estado del artwork».)* Solo la parte que dibuja el componente escucha la posición; la
   carátula no se vuelve a resolver.
 - Semántica: se anuncia la canción ("título, artista"), el estado
   ("Reproduciendo" / "En pausa") y la pista "Abrir Reproduciendo"; antes
@@ -1197,10 +1250,10 @@ es ahora un adaptador sobre `TakiMiniPlayer`; el App Shell no cambia.
 - **Huecos:** `TakiMiniPlayer` recibe el progreso como valor, así que con
   cada posición se reconstruye el componente entero (antes solo la barra);
   el coste es bajo, pero un `ValueListenable` lo evitaría. La resolución de
-  carátulas (bytes → `MemoryImage`) está repetida en Reproduciendo, la Cola
-  y el mini player: candidata a un único adaptador de la feature. El
+  carátulas (bytes → `MemoryImage`) estaba repetida en Reproduciendo, la Cola
+  y el mini player (**resuelto en 1.8B–1.8D** con `AlbumArtworkBuilder`). El
   mini player no muestra carga (no la mostraba antes). `AppColors
-  .miniProgressTrack` queda sin uso en `lib`.
+  .miniProgressTrack` quedaba sin uso en `lib` (`AppColors` se eliminó en 1.9B).
 
 **Estado de la Biblioteca (Fase 1.7A, paso 4 en parte):** `LibraryPage`
 migrada; Favoritos todavía no.
@@ -1220,7 +1273,7 @@ migrada; Favoritos todavía no.
   (`music_off_rounded`, §14) con Reintentar. Mismos textos y acciones; error
   y vacío conservan el pull-to-refresh. La carga sigue siendo el spinner.
 - **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` a 48, como antes
-  (un adaptador privado más; ver el hueco de 1.6E).
+  (un adaptador privado más; ver el hueco de 1.6E). *(Histórico: hoy lo resuelve `AlbumArtworkBuilder`; ver «Estado del artwork».)*
 - **Huecos:** sin ⋯ en las filas ni corazón de favorita (§8 los prevé, pero
   la Biblioteca no los tenía; las acciones siguen en la pulsación larga).
   `TakiButton` no ajusta ni recorta su texto: con etiquetas largas y texto
@@ -1251,9 +1304,9 @@ migrada; solo cambia la presentación.
   (`favorite_border_rounded`, "Sin favoritos", sin acción). Solo la lista y
   el vacío tienen pull-to-refresh, como antes. La carga sigue siendo el
   spinner y, con `skipLoadingOnReload`, un recálculo mantiene la lista.
-- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` a 48.
-- **Huecos:** el adaptador de carátulas es una copia del de la Biblioteca
-  (ver 1.6E). `TakiButton` no recorta su texto: al 150 % con la fuente de
+- **Carátulas:** `ArtworkCache` → bytes → `MemoryImage` a 48. *(Histórico: hoy lo resuelve `AlbumArtworkBuilder`; ver «Estado del artwork».)*
+- **Huecos:** el adaptador de carátulas era una copia del de la Biblioteca
+  (ver 1.6E; **resuelto en 1.8C**). `TakiButton` no recorta su texto: al 150 % con la fuente de
   pruebas no cabe "Permitir acceso" (con las fuentes reales sí). La carga es
   el spinner genérico, sin componente Taki. El resumen no es un
   `TakiSectionHeader` (no encaja: no hay título de sección).
@@ -1295,9 +1348,10 @@ a una playlist" y los diálogos siguen como estaban.
   pero la píldora (dentro del `Stack` de `TakiFocusRing`) se dibuja a su
   ancho natural; quien lo use debe aflojarlas. Tercera copia del adaptador
   bytes →
-  `MemoryImage` (ver 1.6E), aquí para varias carátulas. El sheet de acciones
+  `MemoryImage` (ver 1.6E), aquí para varias carátulas (**resuelto en
+  1.8F** con `PlaylistCoverImages`). El sheet de acciones
   de la playlist, el sheet "Añadir a una playlist" y los diálogos siguen en
-  Material. `PlaylistCover` sigue en uso en el detalle y en el sheet.
+  Material. `PlaylistCover` seguía en uso en el detalle y en el sheet (histórico; eliminado en 1.8).
 
 **Estado de Playlist Detail — Fase 1.7C-2 (completa el paso 5):**
 `PlaylistDetailPage` migrada; solo cambia la presentación. La barra superior
@@ -1341,8 +1395,9 @@ y su menú ⋮ (Renombrar / Eliminar playlist) siguen siendo Material.
   texto, sin acción). La carga sigue siendo el spinner. Pull-to-refresh
   solo con datos (también vacía), como antes.
 - **Carátulas:** `ArtworkCache` → bytes → `MemoryImage`, a 128 en la
-  portada y a 48 en las filas, con un adaptador privado de la página.
-- **Huecos:** cuarta copia del adaptador bytes → `MemoryImage` (ver 1.6E).
+  portada y a 48 en las filas, con un adaptador privado de la página. *(Histórico: hoy lo resuelve `AlbumArtworkBuilder`; ver «Estado del artwork».)*
+- **Huecos:** cuarta copia del adaptador bytes → `MemoryImage` (ver 1.6E; **resuelto en
+  1.8G**).
   `TakiEmptyState` trae su propio scroll: en el pie de una lista se envuelve
   en `IgnorePointer` para que el arrastre llegue al pull-to-refresh (no tiene
   acciones). El asa no es un componente Taki (icono + `Tooltip`, igual que
@@ -1353,8 +1408,53 @@ y su menú ⋮ (Renombrar / Eliminar playlist) siguen siendo Material.
   Con texto al 150 % a 360 px, ⋯ y el asa (96) dejan poco ancho al título,
   que se recorta pronto. Barra
   superior, menú ⋮, diálogos y el sheet de acciones siguen en Material.
-  `PlaylistCover` (aún en el sheet "Añadir a una playlist") queda para la
-  limpieza; `PlayShuffleButtons` ya se eliminó en la Fase 1.7E.
+  `PlaylistCover` (aún en el sheet "Añadir a una playlist") quedaba para la
+  limpieza (eliminado en 1.8H–1.8I); `PlayShuffleButtons` ya se eliminó en la
+  Fase 1.7E.
+
+**Estado del artwork — Fases 1.8A–1.8M (vigente):** todas las pantallas
+resuelven las carátulas locales por el mismo camino; las entradas «Estado de
+…» anteriores son el registro histórico de cada fase. *(Nota posterior, Fases
+2.x–3.7: el mismo camino resuelve también las `ArtworkReference` remotas —
+`ArtworkCache` pide a un `RemoteArtworkLoader`—, y las portadas de playlist
+incluyen canciones remotas; ver `docs/ARCHITECTURE.md`, «Artwork».)*
+
+```text
+ArtworkRepository → ArtworkCache → AlbumArtworkBuilder → MemoryImage + ResizeImage → TakiArtwork
+```
+
+- **Resolución:** `AlbumArtworkBuilder` (una carátula) y
+  `AlbumArtworkMosaicBuilder` (varias, para mosaicos) en `core/artwork/`. El
+  tamaño que reciben es **lógico**; piden a `ArtworkCache` `(size × dpr)`
+  píxeles y entregan `ResizeImage(MemoryImage(bytes))`, o `null` mientras
+  carga, sin `albumId`, sin carátula o si falla la lectura. `TakiArtwork`
+  pinta entonces su placeholder (§7.2).
+- **Decodificación:** `ResizeImage` limita la decodificación al ancho físico
+  pedido, no amplía las imágenes menores y conserva la relación de aspecto; el
+  recorte a cuadrado sigue siendo de `TakiArtwork` (§7.1). Medición en
+  Android 15 (emulador) en `docs/PHASE_1_8K_ARTWORK_DEVICE_MEASUREMENT.md`.
+- **Consumidores:** Biblioteca, Favoritos, Cola, mini player y Reproduciendo
+  (una carátula); lista de playlists, cabecera del detalle y sheet "Añadir a
+  una playlist" (mosaico). Ya no hay adaptadores privados por pantalla.
+- **Mosaico de playlist:** `playlistCoverAlbumIds` toma las primeras 4
+  canciones y deja los álbumes distintos, en orden; `PlaylistCoverImages` los
+  resuelve. Con 4 álbumes, `TakiArtwork.mosaic` dibuja el 2×2 (cada tesela se
+  pide a `floor(size / 2)`); con 1–3, la primera carátula a lado completo; sin
+  canciones, placeholder con borde; con canciones sin carátula, una pieza sin
+  imagen.
+- **Sheet "Añadir a una playlist" (1.8H):** portada de 44 con `TakiArtwork`
+  (radio `sm` = 8 en lugar de 10 y placeholder de Taki); el mosaico usa las 4
+  carátulas (antes se reescalaban).
+- **Retirado:** `ArtworkImage`, `PlaylistCover`, `AlbumArtworkImage` y los
+  adaptadores privados de cada pantalla.
+- **Independiente:** `ArtworkFileCache` (notificación y pantalla de bloqueo)
+  no forma parte de este camino.
+- **Límite conocido (sin resolver):** `ResizeImage` usa solo `width`, así que
+  una carátula no cuadrada conserva su relación de aspecto pero su lado corto
+  queda por debajo del ancho pedido (1000×600 a 512 → 512×307). `TakiArtwork`
+  la dibuja con `BoxFit.cover` y amplía ese lado para llenar el cuadrado, por
+  lo que puede verse menos nítida que con una política basada en el lado corto.
+  No se ha medido con carátulas reales ni en pantalla.
 
 **Para cada paso:**
 

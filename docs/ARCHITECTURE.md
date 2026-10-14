@@ -1,446 +1,483 @@
 # Arquitectura de Taki
 
-Taki es un reproductor de música local para Android. Hoy es 100 % cliente: lee
-la música guardada en el teléfono, sin backend, sin cuentas, sin anuncios y sin
-telemetría.
+Taki es un reproductor de música para Android. Reproduce la **biblioteca local**
+del teléfono (MediaStore) y, si la build se compila con un `client_id` de Jamendo,
+también un **catálogo remoto** (Jamendo: búsqueda y reproducción en línea). Sin
+backend propio, sin cuentas, sin anuncios y sin telemetría. Solo se conecta a
+Jamendo (si está configurado), a las URL de carátula/audio que este devuelve y a
+los enlaces que abre el usuario.
 
 El código sigue una **arquitectura hexagonal (ports & adapters) organizada por
 features**, con tres capas a nivel de app (`app`, `features`, `core`) y tres
 capas dentro de cada feature (`domain`, `infrastructure`, `presentation`).
 
+> Estado de las fases y validación en dispositivo: ver
+> `docs/PHASE_3_10_DOCUMENTATION_SYNC.md`, `PHASE_3_9_ANDROID_VALIDATION_RELEASE.md`
+> y `PHASE_3_9B_PRODUCTION_SIGNING.md`.
+
 ## Estructura
 
-Árbol real de `lib/` (se omiten los archivos `.gitkeep`):
+Árbol real de `lib/` (se omiten los `.gitkeep`):
 
 ```
 lib/
-├── main.dart                     Composition root: crea los adapters que deben
-│                                 existir antes de runApp y los inyecta
+├── main.dart                     Composition root: crea lo que debe existir antes
+│                                 de runApp y lo inyecta con overrides
 ├── app/                          Composición de la app
-│   ├── app.dart                  TakiApp: MaterialApp.router, locale es, tema
+│   ├── app.dart                  TakiApp: MaterialApp.router, locale es, tema y
+│   │                             PlaybackErrorListener (aviso de errores)
 │   ├── router.dart               Rutas (go_router) y shell con barra inferior
-│   ├── theme/
-│   │   └── app_theme.dart        AppTheme: construye el ThemeData global
-│   └── widgets/
-│       └── song_actions_sheet.dart   Menú de acciones de una canción
+│   ├── jamendo_wiring.dart       Cablea Jamendo (lookup, reproducción, búsqueda,
+│   │                             atribución, carátulas) en los registros de core
+│   ├── song_lookup_wiring.dart   SourceSongLookup: local + Jamendo
+│   ├── theme/app_theme.dart      AppTheme: ThemeData global
+│   └── widgets/song_actions_sheet.dart   Menú de acciones de una canción
 ├── core/                         Piezas compartidas, sin lógica de una feature
 │   ├── domain/                   Núcleo de dominio musical (Dart puro)
-│   │   ├── entities/             Song, SongReference
-│   │   ├── ports/                ArtworkRepository
-│   │   └── services/             SongMatcher
-│   ├── artwork/                  ArtworkCache y providers de carátulas
-│   ├── theme/                    AppColors (tokens visuales)
-│   ├── widgets/                  Taki* (Design System), ArtworkImage,
-│   │                             PlaceholderPage, song_actions
-│   ├── database/                 TakiDatabase (taki.db) y takiDatabaseProvider
+│   │   ├── entities/             Song, LocalSong, MusicIdentity, SongReference,
+│   │   │                         ArtworkReference, PlaybackResource,
+│   │   │                         ProviderAttribution, CatalogSearch*, resultados y
+│   │   │                         fallos de lookup/atribución, excepciones
+│   │   ├── ports/                SongLookup, PlaybackResolver, ArtworkRepository,
+│   │   │                         ArtworkResolver, RemoteArtworkLoader,
+│   │   │                         ArtworkHttpClient, CatalogSearch, CatalogSources,
+│   │   │                         AttributionLookup, ExternalLinkOpener
+│   │   └── services/             Source* (enrutado por fuente), Local*Resolver,
+│   │                             SongMatcher, findAllIsolatingSources,
+│   │                             external_url (openableUrl)
+│   ├── artwork/                  ArtworkCache, AlbumArtworkBuilder, providers,
+│   │                             HttpRemoteArtworkLoader, IoArtworkHttpClient
+│   ├── catalog/                  catalogSourcesProvider
+│   ├── lookup/                   songLookupProvider, attributionLookupProvider
+│   ├── links/                    externalLinkOpenerProvider (url_launcher)
+│   ├── theme/                    Tokens Taki (TakiColors, TakiTypography, …)
+│   ├── widgets/                  Taki* (Design System), PlaceholderPage,
+│   │                             song_actions
+│   ├── database/                 TakiDatabase (taki.db, v3) y takiDatabaseProvider
 │   ├── constants/                LibraryConstants
-│   ├── utils/                    duration_format, LruCache
-│   └── error/                    Vacía (solo .gitkeep)
+│   └── utils/                    duration_format, LruCache
 └── features/
-    ├── library/                  Biblioteca (MediaStore) y Favoritos
-    │   ├── domain/               entities, ports, services, usecases
-    │   ├── infrastructure/
-    │   └── presentation/         pages, providers (widgets/ vacía)
-    ├── player/                   Reproducción, cola, notificación
-    │   ├── domain/               entities, ports, usecases
-    │   ├── infrastructure/
-    │   └── presentation/         pages, providers, widgets
-    ├── playlists/
-    │   ├── domain/               entities, ports, usecases
-    │   ├── infrastructure/
-    │   └── presentation/         pages, providers, widgets
-    ├── settings/                 Solo SettingsPage (usa PlaceholderPage); el
-    │                             resto de carpetas están vacías
-    └── search/                   Esqueleto vacío: solo carpetas con .gitkeep,
-                                  sin código ni ruta en la app
+    ├── library/                  Biblioteca local (MediaStore), permiso de audio y
+    │                             Favoritos (domain, infrastructure, presentation)
+    ├── player/                   Reproducción, cola, notificación/MediaSession,
+    │                             Reproduciendo, mini reproductor, atribución,
+    │                             aviso de errores de reproducción
+    ├── playlists/                Playlists locales y remotas (mixtas)
+    ├── search/                   Búsqueda de catálogo (neutral al proveedor)
+    ├── jamendo/                  Proveedor remoto actual (domain + infrastructure,
+    │                             sin presentation)
+    └── settings/                 Solo SettingsPage (provisional)
 ```
 
-Pestañas de la app: **Biblioteca**, **Playlists**, **Favoritos** y **Ajustes**.
-Favoritos vive en la feature `library` (los favoritos son una vista filtrada de
-la biblioteca). **Reproduciendo** y **Cola** son pantallas completas fuera del
-shell.
+Pestañas: **Biblioteca**, **Buscar** (solo si hay algún catálogo disponible,
+entre Biblioteca y Playlists), **Playlists**, **Favoritos** y **Ajustes**.
+Favoritos vive en `library`. **Reproduciendo** y **Cola** son pantallas completas
+fuera del shell.
 
 ## Capas
 
 ### `app`: composición
 
-- Arranca la app (`TakiApp`), fija el locale (`es`) y aplica el tema.
-- Navegación: `router.dart` con `StatefulShellRoute.indexedStack` (cada
-  pestaña conserva su estado) y las rutas `/now-playing` y `/queue`.
-- `AppTheme` (`app/theme/app_theme.dart`) construye el `ThemeData` Material 3
-  oscuro a partir de los tokens de `core/theme` (Sora para títulos, DM Sans
-  para el resto). Ambas son assets locales en `assets/fonts/`, declaradas en
-  la sección `fonts:` de `pubspec.yaml`: no se descargan en tiempo de
-  ejecución y `google_fonts` ya no es una dependencia.
-- UI que coordina varias features: `showSongActions` / `SongActionsSheet`
-  (`app/widgets/song_actions_sheet.dart`) combina cola (`player`), favoritos
-  (`library`) y playlists (`playlists`).
-- Inyecta en las páginas lo que ellas no pueden importar: el router pasa
-  `showSongActions` a `LibraryPage`, `FavoritesPage` y `PlaylistDetailPage`,
-  y los callbacks de navegación (`onOpenPlaylist`, `onOpenQueue`, `onOpen`).
-- `TakiApp` mantiene vivo `favoriteSongsProvider` para que los favoritos se
-  resuelvan cada vez que la biblioteca se carga o se refresca.
+- Arranca la app (`TakiApp`), fija el locale (`es`), aplica el tema y monta
+  `PlaybackErrorListener` en el `builder` de `MaterialApp.router`.
+- Navegación: `router.dart` con `StatefulShellRoute.indexedStack` y las rutas
+  `/now-playing` y `/queue`. La pestaña Buscar solo existe si
+  `catalogSourcesProvider.isAvailable`.
+- `AppTheme` construye el `ThemeData` Material 3 oscuro con los tokens de
+  `core/theme` (Sora para títulos, DM Sans para el resto; ambas son assets
+  locales).
+- **Wiring de proveedores** (`jamendo_wiring.dart`, `song_lookup_wiring.dart`): es
+  el único sitio donde se enlazan las piezas concretas de Jamendo con los
+  registros neutrales de `core` (`SourceSongLookup`, `SourcePlaybackResolver`,
+  `SourceCatalogSources`, `SourceAttributionLookup`, `SourceArtworkResolver`).
+- UI que coordina varias features: `showSongActions` / `SongActionsSheet` combina
+  cola (`player`), favoritos (`library`) y playlists (`playlists`); el router lo
+  inyecta en `LibraryPage`, `FavoritesPage`, `PlaylistDetailPage` y `SearchPage`.
 
 ### `core`: piezas compartidas
 
-`core` contiene solo lo que usan varias features o la app entera: el dominio
-musical compartido, los tokens visuales, los widgets reutilizables, la
-abstracción de carátulas y la base de datos local.
-
-**`core` no debe contener lógica específica de una feature.** Algo entra en
-`core` cuando lo necesitan varias features y puede expresarse sin conocer a
-ninguna de ellas. Lo propio de una feature (sus casos de uso, sus
-repositorios, sus páginas) se queda en la feature.
+Solo lo que usan varias features o la app entera: el dominio musical, los
+contratos entre capas, las cachés de carátulas, los tokens visuales, los widgets
+reutilizables y la base de datos. **No contiene lógica de una feature ni
+nombra a ningún proveedor concreto** (lo comprueban los tests).
 
 ### `features`: funcionalidad
 
-Cada feature se divide en tres capas:
-
-- `domain/`: `entities/`, `ports/` (`abstract interface class`),
-  `usecases/` (una acción del negocio cada uno) y, cuando hace falta,
-  `services/` (lógica de dominio sin estado, p. ej. `SongFilter`).
-- `infrastructure/`: adapters que implementan los ports con paquetes externos
-  o canales nativos.
-- `presentation/`: `pages/`, `widgets/` propios y `providers/` de Riverpod.
+Cada feature se divide en `domain/` (`entities/`, `ports/` como
+`abstract interface class`, `usecases/`, `services/`), `infrastructure/`
+(adapters con paquetes externos o canales nativos) y `presentation/` (`pages/`,
+`widgets/`, `providers/` de Riverpod). `jamendo` no tiene `presentation`.
 
 ## Reglas de dependencia
-
-### Entre capas de la app
 
 ```
 app ──────► features ──────► core ──────► paquetes externos permitidos
  └──────────────────────────► core
 ```
 
-Permitido:
-
-- `app → features`
-- `app → core`
-- `features → core`
-- `core → paquetes externos` (Flutter, Riverpod, equatable, sqflite…, según
-  la carpeta; ver `core/domain` más abajo)
-
-Prohibido:
-
-- `features → app`
-- `core → features`
-- `core → app`
-- `feature → otra feature`, salvo las excepciones documentadas abajo.
+Permitido: `app → features`, `app → core`, `features → core`.
+Prohibido: `features → app`, `core → features`, `core → app` y
+`feature → otra feature` salvo las excepciones de abajo.
 
 ### Dentro de una feature
 
-1. **`domain` es Dart puro.** No importa `package:flutter/*` ni paquetes
-   externos; la única excepción es `package:equatable`. Puede importar
-   `core/domain` y `core/constants`.
-2. **`infrastructure` implementa los ports del dominio.** Aquí viven
-   `just_audio`, `audio_service`, `audio_session`, `sqflite`,
-   `permission_handler`, `device_info_plus`, `path_provider` y el canal nativo
-   `taki/media_store`. No expone tipos de esos paquetes: los traduce a
-   entidades de dominio. (Excepción conocida: `audioHandlerProvider` expone
-   `TakiAudioHandler`; ver "Problemas conocidos".)
-3. **`presentation` usa los casos de uso mediante providers de Riverpod.**
-   Páginas y widgets no instancian adapters ni llaman a paquetes de
-   infraestructura.
-4. **La dirección es hacia adentro:**
+1. **`domain` es Dart puro** (solo `equatable` y `dart:*`; puede importar
+   `core/domain`). Se comprueba en `core/domain`; en las features se revisa a mano.
+2. **`infrastructure` implementa los ports**: aquí viven `just_audio`,
+   `audio_service`, `audio_session`, `sqflite`, `permission_handler`,
+   `device_info_plus`, `path_provider`, el canal `taki/media_store` y el HTTP de
+   Jamendo.
+3. **`presentation` usa los casos de uso por providers de Riverpod.**
+4. Dirección hacia adentro: `presentation ─► domain ◄─ infrastructure`. El cableado
+   se hace en `presentation/providers/*_providers.dart`, el único lugar de
+   presentation que importa `infrastructure`.
 
-   ```
-   presentation ──► domain ◄── infrastructure
-   ```
+### Reglas específicas de proveedores
 
-   El cableado (qué adapter implementa qué port) se hace en
-   `presentation/providers/*_providers.dart`, el único lugar de presentation
-   que importa `infrastructure`. Lo que debe existir antes de `runApp` se crea
-   en `main.dart` (ver "Composition root").
+- `features/search`, `features/player` y `features/playlists` **no importan
+  `features/jamendo` ni mencionan «jamendo»** (tests de arquitectura).
+- `features/search` no depende de `app`, y solo importa de otra feature el
+  provider del Player.
+- `core` no importa Jamendo (`jamendo_security_test`).
+- Jamendo depende solo de `core`; lo conecta `app/`.
 
-### Excepciones feature → feature
+### Excepciones feature → feature (7)
 
-Son 6 imports, todos hacia `presentation/providers` de otra feature (su API
-pública) y desde la `presentation` de la feature que los usa. Ninguna feature
-importa el `domain`, la `infrastructure`, las páginas ni los widgets de otra.
+Son 7 imports `presentation → presentation/providers` de otra feature. Ninguna
+feature importa el `domain`, la `infrastructure`, las páginas ni los widgets de
+otra. `test/architecture/dependency_rules_test.dart` las enumera.
 
-| # | Origen | Destino | Qué usa | Motivo |
-|---|---|---|---|---|
-| 1 | `library/presentation/pages/library_page.dart` | `player/presentation/providers/player_providers.dart` | `playSongsProvider`, `currentSongProvider`, `notificationPermissionProvider` | Tocar una canción reproduce la lista desde ahí, la fila que suena se resalta y, tras empezar a reproducir, se pide el permiso de notificaciones |
-| 2 | `library/presentation/pages/favorites_page.dart` | `player/presentation/providers/player_providers.dart` | `playSongsProvider`, `playSongsShuffledProvider`, `currentSongProvider`, `notificationPermissionProvider` | Lo mismo para Favoritos, más Reproducir/Aleatorio |
-| 3 | `player/presentation/pages/now_playing_page.dart` | `library/presentation/providers/favorites_providers.dart` | `isFavoriteProvider`, `toggleFavoriteProvider` | El corazón de Reproduciendo marca/desmarca la canción; los favoritos viven en `library` |
-| 4 | `playlists/presentation/providers/playlists_providers.dart` | `library/presentation/providers/songs_notifier.dart` | `songsProvider`, `LibraryLoaded` | Las entradas de una playlist se resuelven contra las canciones escaneadas (`playlistItemsProvider`), los mosaicos de portada usan sus `albumId` y "Reintentar" reescanea la biblioteca si falló |
-| 5 | `playlists/presentation/pages/playlist_detail_page.dart` | `library/presentation/providers/songs_notifier.dart` | `songsProvider`, `LibraryNeedsPermission` | El detalle muestra el mismo estado de permiso que la biblioteca (pedir acceso / abrir ajustes) y pull-to-refresh reescanea |
-| 6 | `playlists/presentation/pages/playlist_detail_page.dart` | `player/presentation/providers/player_providers.dart` | `playSongsProvider`, `playSongsShuffledProvider`, `currentSongProvider`, `notificationPermissionProvider` | Reproducir, mezclar y resaltar la canción que suena |
+| # | Origen | Destino | Motivo |
+|---|---|---|---|
+| 1 | `library/…/library_page.dart` | `player/…/player_providers.dart` | Reproducir, resaltar la que suena, pedir el permiso de notificaciones |
+| 2 | `library/…/favorites_page.dart` | `player/…/player_providers.dart` | Ídem + Reproducir/Aleatorio |
+| 3 | `player/…/now_playing_page.dart` | `library/…/favorites_providers.dart` | El corazón de Reproduciendo (los favoritos viven en `library`) |
+| 4 | `playlists/…/playlists_providers.dart` | `library/…/songs_notifier.dart` | Reencuentro de canciones **locales** con la biblioteca escaneada (`localLibrarySongs`) |
+| 5 | `playlists/…/playlist_detail_page.dart` | `library/…/songs_notifier.dart` | Estado de permiso local y rescan |
+| 6 | `playlists/…/playlist_detail_page.dart` | `player/…/player_providers.dart` | Reproducir, mezclar, resaltar |
+| 7 | `search/…/search_page.dart` | `player/…/player_providers.dart` | Tocar un resultado lo reproduce (única dependencia de `search` hacia otra feature) |
 
-**Por qué son aceptables por ahora:** son dependencias de composición entre
-providers, no de modelo ni de UI. Reproducir, consultar favoritos o leer la
-biblioteca son capacidades que ya tienen una API pública en su feature, y
-envolverlas en ports/commands de `core` solo para cumplir la regla añadiría
-una capa sin comportamiento propio. `test/architecture/dependency_rules_test.dart`
-las enumera una a una; cualquier import nuevo entre features hace fallar el
-test.
-
-> **Estas excepciones deberán reevaluarse cuando Taki incorpore el catálogo
-> musical online**, en particular la 4 y la 5: hoy las playlists dependen de
-> la biblioteca local escaneada.
+Son dependencias de composición entre providers, no de modelo ni de UI. Las
+número 4 y 5 son **provisionales**: dependen de la biblioteca local escaneada.
 
 ## `core/domain`: núcleo de dominio compartido
 
-| Elemento | Archivo | Qué es |
-|---|---|---|
-| `Song` | `entities/song.dart` | Canción de la biblioteca: id, título, artista, álbum, `albumId`, duración, ruta, `contentUri`, fecha y carpeta |
-| `SongReference` | `entities/song_reference.dart` | Referencia guardada a una canción (id + copia de respaldo de título, artista, duración y ruta). La implementan `FavoriteEntry` (`library`) y `PlaylistEntry` (`playlists`) |
-| `SongMatcher` | `services/song_matcher.dart` | Reencuentra una `SongReference` en la biblioteca: id → ruta → título + artista con duración ±1 s |
-| `ArtworkRepository` | `ports/artwork_repository.dart` | Port de carátulas: `getAlbumArtwork(albumId, size)` → bytes o `null` |
-
-Reglas:
-
-- Es **Dart puro**: no depende de Flutter, de Riverpod, de ninguna
-  infraestructura ni de ninguna feature. Solo usa `package:equatable` (y
-  `dart:*`).
-- Lo usan `library`, `player` y `playlists`.
-
-## `core/artwork`: carátulas compartidas
-
-- **Port:** `ArtworkRepository` (en `core/domain/ports`).
-- **`ArtworkCache`** (`artwork_cache.dart`): caché LRU en memoria de bytes de
-  carátula por `(albumId, size)`, con deduplicación de peticiones en curso;
-  también recuerda los álbumes sin carátula.
-- **`artworkRepositoryProvider`** (`artwork_providers.dart`): no tiene
-  implementación por defecto; lanza `UnimplementedError` si nadie lo
-  sobrescribe.
-- **`artworkCacheProvider`**: `ArtworkCache` sobre el repositorio anterior.
-  `SongsNotifier.rescan` la vacía al reescanear.
-- **Implementación concreta:** `MediaStoreArtworkRepository`
-  (`features/library/infrastructure/`), que lee las miniaturas de MediaStore
-  por el canal `taki/media_store`. `main.dart` crea **una instancia** y la usa
-  para el reproductor (`initPlayer`) y para sobrescribir
-  `artworkRepositoryProvider`. Solo hay carátulas locales.
-
-En el reproductor, `ArtworkFileCache` (`features/player/infrastructure/`)
-reutiliza el mismo port para guardar las carátulas como archivo, porque la
-notificación y la pantalla de bloqueo necesitan una URI.
-
-## `core/theme` y `core/widgets`
-
-**`core/theme/app_colors.dart`**: `AppColors`, la paleta "Medianoche + ámbar"
-(superficies, texto, acento, acentos alternativos y colores del reproductor).
-Son tokens: no construye temas. `AppTheme` (en `app/`) compone el
-`ThemeData` con ellos.
-
-**`core/widgets/`**: widgets reutilizables que no dependen de ninguna feature
-(solo de `core` y de Flutter/Riverpod):
-
-| Widget | Uso |
+| Elemento | Qué es |
 |---|---|
-| `ArtworkImage` | Carátula con esquinas redondeadas; lee `artworkCacheProvider`. Recibe `albumId`, `size`, `borderRadius` |
-| `Taki*` (`TakiSongTile`, `TakiButton`, `TakiEmptyState`, `TakiErrorState`, `TakiPlaylistCard`, `TakiArtwork`, …) | Componentes del Design System: solo presentación, reciben datos y callbacks. Ver `DESIGN_SYSTEM.md` §21 |
-| `PlaceholderPage` | Pantalla provisional (la usa Ajustes) |
-| `song_actions.dart` | `ExtraSongAction` (acción extra de una pantalla) y el typedef `ShowSongActions`, la firma del menú de canción que implementa `app/` |
+| `Song` | **Modelo universal** de canción de cualquier fuente: `musicIdentity`, `title`, `artist?`, `album?`, `artwork` (`ArtworkReference`) y `durationMs`. No tiene datos locales ni de proveedor |
+| `LocalSong` | `Song` **específica de la biblioteca local**: añade `id` (MediaStore), `albumId`, `path`, `contentUri`, `folder`, fecha. Solo código local la usa (`LocalPlaybackResolver`, `LocalArtworkResolver`, `SongFilter`, `SongMatcher`, `localPathOf`) |
+| `MusicIdentity` | `(source, externalId)`: **qué canción es**. Texto opaco, igualdad exacta (`local:42 ≠ jamendo:42 ≠ jamendo:0042`); no depende de un id entero local ni se interpreta |
+| `SongReference` | Referencia guardada (identidad + copia de respaldo de título/artista/duración/ruta); la implementan `FavoriteEntry` y `PlaylistEntry` |
+| `ArtworkReference` | Sellada: `LocalArtworkReference(albumId)`, `RemoteArtworkReference(url, w, h)`, `UnavailableArtworkReference` |
+| `PlaybackResource` | Sellada: cómo reproducir (ver «Reproducción») |
+| `ProviderAttribution` | Atribución de un proveedor por canción (ver «Atribución») |
+| `CatalogSearchQuery/Page/Failure`, `CatalogProviderInfo` | Contrato de búsqueda de catálogo |
 
-`ArtworkImage` solo lo usa ya `PlaylistCover` (el sheet "Añadir a una
-playlist"); se retirará con esa migración.
+`core/domain` es **Dart puro** (solo `equatable` y `dart:*`). `Song` y
+`LocalSong` se comparan por valor **y por tipo en ejecución**.
 
-**Reemplazados** (eliminados en la Fase 1.7E, sin consumidores): `SongTile` →
-`TakiSongTile`; `PlayShuffleButtons` → `TakiButton` (Reproducir primario,
-Aleatorio secundario); `MessageView` → `TakiEmptyState` / `TakiErrorState`;
-`PlayingBars` (de `features/player`) → `TakiPlayingIndicator`.
+## Identidad y persistencia
 
-Un widget de `core/widgets` no debe importar ninguna feature ni `app/`. Si
-necesita datos de una feature, los recibe por parámetro o mediante un port de
-`core/domain`.
-
-## Composition root
-
-**`main.dart`** crea, antes de `runApp`, lo que debe existir desde el arranque
-y lo inyecta con overrides de `ProviderScope`:
-
-| Qué crea | Clase concreta | Provider que sobrescribe |
-|---|---|---|
-| Carátulas | `MediaStoreArtworkRepository` | `artworkRepositoryProvider` |
-| Motor de reproducción (`initPlayer`) | `JustAudioPlayerAdapter` (`AudioPlayerPort`) | `audioPlayerPortProvider` |
-| Handler del sistema (`initPlayer`) | `TakiAudioHandler` (vía `AudioService.init`) | `audioHandlerProvider` |
-| Base de datos (`TakiDatabase.tryOpen`) | `Database` de sqflite | `takiDatabaseProvider` (solo si abrió) |
-
-`initPlayer()` (`features/player/infrastructure/player_bootstrap.dart`)
-configura `AudioSessionConfiguration.music()` e inicia `AudioService`.
-
-El resto de adapters se cablean en el composition root de cada feature, con
-un valor por defecto que los tests sobrescriben:
-
-| Archivo | Port → adapter |
-|---|---|
-| `library/presentation/providers/library_providers.dart` | `SongRepository` → `MediaStoreSongRepository`; `MediaPermissionPort` → `PermissionHandlerMediaPermission` |
-| `library/presentation/providers/favorites_providers.dart` | `FavoritesRepository` → `SqfliteFavoritesRepository` |
-| `playlists/presentation/providers/playlists_providers.dart` | `PlaylistsRepository` → `SqflitePlaylistsRepository` |
-| `player/presentation/providers/player_providers.dart` | `NotificationPermissionPort` → `PermissionHandlerNotificationPermission` |
-
-`app/router.dart` completa la composición de UI: inyecta `showSongActions` y
-los callbacks de navegación en las páginas.
-
-## Fuente de canciones
-
-La fuente de canciones es un port de `library`:
-
-```dart
-// features/library/domain/ports/song_repository.dart
-abstract interface class SongRepository {
-  Future<List<Song>> getSongs();
-}
-```
-
-- Adapter actual (el único): `MediaStoreSongRepository`, que consulta
-  MediaStore por el canal nativo `taki/media_store`
-  (`android/app/src/main/kotlin/com/limbermendoza/taki/MediaStoreChannel.kt`).
-  El canal es un `FlutterPlugin` que `MainActivity.configureFlutterEngine`
-  registra en el engine compartido con el servicio de audio.
-- `GetSongs` aplica `SongFilter`: descarta audios de menos de 30 s y los que
-  están en carpetas excluidas (`LibraryConstants`).
-- Para sumar otra fuente basta con otro adapter de `SongRepository` y cambiar
-  (o combinar) `songRepositoryProvider`. **Hoy no existe ninguna otra
-  fuente.**
+`MusicIdentity` es lo que se **persiste**: favoritos y playlists guardan
+`source` + `external_id` (texto) en `taki.db` (v3). La fuente local es
+`localMusicSource = 'local'` (`localMusicIdentity(id)`), la de Jamendo es
+`'jamendo'`. Ninguna capa convierte `externalId` a número ni usa `Song.id` como
+identidad universal. El id del `MediaItem` de audio_service es
+`encode(source)/encode(externalId)`.
 
 ## Reproducción
 
 ```
-Biblioteca ──PlaySongs──► AudioPlayerPort ◄── JustAudioPlayerAdapter (just_audio)
-                                ▲
-notificación / bloqueo /        │ refleja estado y reenvía comandos
-auriculares ──► audio_service ──► TakiAudioHandler
+Song ─► PlaybackResolver ─► PlaybackResource ─► JustAudioPlayerAdapter (AudioSource)
+                                                   ▲
+notificación / bloqueo / auriculares ─► audio_service ─► TakiAudioHandler
 ```
 
-- `AudioPlayerPort` (`player/domain`) es el motor. La UI lo usa mediante
-  casos de uso (`player_usecases.dart`).
-- `TakiAudioHandler` (`player/infrastructure`) es un `BaseAudioHandler` que
-  publica `MediaItem` y `PlaybackState` en audio_service y reenvía los
-  comandos del sistema al port. No tiene lógica propia de reproducción.
-- `MainActivity` extiende `AudioServiceActivity` para compartir el
-  FlutterEngine con el servicio.
-- Si una canción falla, se emite por `errors` y se salta a la siguiente
-  (hasta 10 seguidas; después pausa).
+- `PlaybackResolver.resolve(Song)` devuelve un `PlaybackResource` o lanza
+  `IdentityNotFound` / `PlaybackResolutionError`. `SourcePlaybackResolver` enruta por
+  `identity.source`; una fuente sin resolver lanza `IdentityNotFound`.
+  Resolvers: `LocalPlaybackResolver` (usa `LocalSong.contentUri`) y
+  `JamendoPlaybackResolver`.
+- **Variantes de `PlaybackResource`:** `LocalUriResource(uri)`;
+  `RemoteUriResource(uri, expiresAt?)` (hoy Jamendo no informa `expiresAt`);
+  `ProviderPlaybackResource(engine, reference?)` (motor propio de una fuente; sin
+  productor hoy); `UnavailableResource(reason)`.
+- `JustAudioPlayerAdapter` convierte `Local/RemoteUriResource` en
+  `AudioSource.uri`; `Provider…`/`Unavailable…` o un fallo de resolución en una fuente
+  no reproducible que falla al llegar su turno. Resuelve **todas** las canciones al
+  encolar (con `Future.wait`).
+- Si una canción falla se emite por `errors` (`PlaybackError`) y se salta a la
+  siguiente (hasta 10 seguidas; después pausa). `PlaybackErrorListener` (en
+  `player/presentation`, montado en `app.dart`) muestra un SnackBar discreto: «No se
+  pudo reproducir. Pasando a la siguiente.» o «No se pudo reproducir esta canción»;
+  nunca detalles técnicos. No reintenta.
+- `TakiAudioHandler` (`BaseAudioHandler`) publica `MediaItem` y `PlaybackState` y
+  reenvía los comandos del sistema al port; la carátula llega después de la
+  metadata (con guarda por `id` contra respuestas tardías).
+- `MainActivity` extiende `AudioServiceActivity`.
 
 ### Cola
 
-- `PlaybackState.queue` es la **cola real**: el orden de reproducción (con
-  aleatorio, el mezclado). Todos los índices del port se refieren a ella; la
-  UI traduce los suyos (p. ej. "A continuación" empieza en `upcomingStart`).
-- Regla de dominio: solo se edita lo que viene después de la canción actual
-  (`PlaybackState.isUpcoming`). `AddToQueue` y `PlayNext` empiezan a
-  reproducir si no suena nada.
-- El adapter mantiene dos órdenes: el de las fuentes de just_audio (original)
-  y el de reproducción. Con aleatorio usa `QueueShuffleOrder`, un
-  `ShuffleOrder` propio que controla dónde quedan las canciones insertadas
-  (just_audio envía ese orden a ExoPlayer en cada add/insert/move/remove, sin
-  recargar la cola). "Mover" con aleatorio solo reordena la reproducción.
+- `PlaybackState.queue` es la **cola real** (con aleatorio, el orden mezclado);
+  todos los índices del port se refieren a ella.
+- Solo se edita lo que viene después de la actual. `AddToQueue` y `PlayNext`
+  empiezan a reproducir si no suena nada.
+- El adapter mantiene el orden de las fuentes de just_audio y el de reproducción
+  (`QueueShuffleOrder`). Solo se publica la canción actual en la MediaSession.
+- `PlaySongs` reemplaza la cola; tocar un resultado de Search reproduce **solo esa
+  canción** (las acciones «a continuación» / «a la cola» están en el menú ⋯).
+
+## Lookup: de la identidad a la `Song`
+
+`SongLookup.findAll(identidades)` → `SongLookupResult`: cada identidad cae en
+exactamente un cubo: `found`, `missing` (la fuente existe pero no tiene esa
+canción; puede volver) o `unsupported` (ninguna fuente registrada). Un fallo real
+se lanza como `SongLookupFailure` y **nunca** se convierte en `missing`.
+
+- `SourceSongLookup` enruta por fuente (una consulta por fuente, en paralelo);
+  implementaciones: `LocalSongLookup` (biblioteca ya filtrada) y `JamendoSongLookup`
+  (`tracksByIds` en lote).
+- **Aislamiento por fuente:** `findAllIsolatingSources` consulta una fuente a la
+  vez; si una falla, solo sus identidades quedan en `failed` (se ocultan, sin
+  reencuentro ni borrado) y las demás se resuelven; si fallan todas se relanza el
+  fallo. Lo usan `GetFavoriteSongs` y `GetPlaylistSongs`. El contrato de
+  `SongLookup`/`SourceSongLookup` no cambió (el lote de `SourceSongLookup` sigue
+  fallando entero para otros consumidores).
+- **Favoritos y playlists** resuelven canciones de varias fuentes con ese lookup.
+  El permiso de música ya no bloquea las remotas: se pide solo si no hay nada que
+  mostrar. El reencuentro (`SongMatcher`) aplica **solo** a identidades locales
+  `missing`. `localLibrarySongs(ref)` entrega la biblioteca sin que su estado
+  afecte a otras fuentes.
+
+## Artwork
+
+Una carátula es una `ArtworkReference` que `Song.artwork` trae tal como la fuente
+la entrega.
+
+```text
+Song.artwork (ArtworkReference)
+   ↓
+ArtworkCache            LRU (200) en memoria por (referencia, px); deduplica;
+   │                    local → ArtworkRepository (MediaStore, albumId)
+   │                    remota → RemoteArtworkLoader (HttpRemoteArtworkLoader)
+   ↓
+AlbumArtworkBuilder     resuelve el ImageProvider (ResizeImage, sin ampliar)
+   ↓
+TakiArtwork             solo presentación
+```
+
+- **Local:** `MediaStoreArtworkRepository` lee las miniaturas por el canal
+  `taki/media_store`.
+- **Remota:** `HttpRemoteArtworkLoader` (sobre `ArtworkHttpClient`/`IoArtworkHttpClient`
+  de `dart:io`) valida `http(s)` con host, 10 s, 5 MB y firma de imagen
+  (JPEG/PNG/GIF/WebP). Un fallo remoto no se memoiza como ausencia. Una referencia
+  remota sin cargador se trata como ausente.
+- **Playlists:** `playlistCoverArtworkProvider` combina la biblioteca local (con
+  prioridad) con las carátulas de las canciones resueltas por `SongLookup`
+  (`remoteCoverArtworkProvider`, una consulta en lote por cambio del conjunto).
+  `PlaylistCoverImages` pide las imágenes a los builders.
+- **MediaSession / notificación / pantalla de bloqueo:** `ArtworkFileCache`
+  (`features/player/infrastructure`) es **independiente** del flujo anterior:
+  guarda carátulas como archivo en el cache dir porque el sistema necesita una URI
+  `file://`. Local: `album_<id>_<size>.jpg` (por el repositorio). Remota:
+  `remote_<FNV-1a 64 de la URL>.img`, con los bytes del mismo `RemoteArtworkLoader`,
+  escritura atómica y deduplicación de descargas en vuelo. Sin limpieza propia.
+  `main.dart` comparte **una** instancia del cargador entre la UI y esta caché.
+- `ArtworkResolver`/`SourceArtworkResolver` existen y están cableados pero **ninguna
+  pantalla los consume** (la UI usa `song.artwork`).
+
+## Catálogo y búsqueda
+
+- **Contrato (`core`):** `CatalogSearch.search(CatalogSearchQuery)` →
+  `CatalogSearchPage(songs, hasMore, attributions)`; fallo = `CatalogSearchFailure`.
+  `CatalogSources` / `SourceCatalogSources` registran las fuentes
+  (`CatalogProviderInfo`); `searchIn(source)` devuelve su `CatalogSearch`.
+- **`features/search`:** `SearchCatalog` (caso de uso), `CatalogSearchNotifier`
+  (controlador) y `CatalogSearchState` (`Idle`, `Typing`, `Loading`, `Results`,
+  `Empty`, `Failed`, `Unavailable`). Mínimo 2 caracteres, debounce de 400 ms
+  (`SearchScheduler`), páginas de 20, **generación** para descartar respuestas
+  obsoletas, deduplicación por `MusicIdentity` (primera aparición gana) y `loadMore`
+  por scroll. No reintenta por su cuenta. Con varias fuentes usa la primera
+  registrada (**provisional**; no hay selector, mezcla ni ranking).
+- `SearchPage` no conoce proveedores: el menú ⋯ de cada fila es el
+  `showSongActions` inyectado por el router.
+
+## Atribución
+
+- `ProviderAttribution(identity, providerName, pageUrl?, licenseUrl?, licenseName?)`
+  es neutral al proveedor y **no** vive en `Song`.
+- `AttributionLookup.findAll(identidades)` → `AttributionLookupResult{found, absent}`;
+  un fallo real es `AttributionLookupFailure` (nunca se disfraza de ausencia).
+  `SourceAttributionLookup` enruta por fuente; `JamendoAttributionLookup` usa
+  `tracksByIds`. Nada se persiste.
+- `attributionProvider` (familia por `MusicIdentity`, en `player`) alimenta
+  `AttributionSection` en Reproduciendo: origen, licencia y los botones «Ver
+  canción» / «Ver licencia», solo con URL `http(s)`. Cargando, ausente o fallo: no
+  se muestra nada y no se bloquea la reproducción.
+- `ExternalLinkOpener` (puerto) / `UrlLauncherLinkOpener` abre el navegador del
+  sistema; `openableUrl` solo admite `http(s)` con host.
+
+## Jamendo (proveedor actual)
+
+`features/jamendo` (domain + infrastructure) es el **único** proveedor remoto.
+Toda la lógica específica vive ahí; `core` no la conoce.
+
+- **Credencial:** `JAMENDO_CLIENT_ID` por `--dart-define` (formato validado: 4–64
+  `[A-Za-z0-9_-]`). Sin él, Jamendo **no se registra**: no hay pestaña Buscar y la
+  app funciona solo con la biblioteca local. El id queda dentro del binario y
+  nunca se persiste ni se escribe en logs ni errores.
+- **API:** `HttpJamendoApi` (`Uri.https('api.jamendo.com', …)`), 10 s, 4 MB,
+  reintenta hasta 3 veces una respuesta vacía; `tracksByIds` en lotes de 50.
+  Reutiliza el `ArtworkHttpClient` existente como transporte GET.
+- **Parser:** decodifica entidades HTML de título/artista/álbum (no de URLs ni ids).
+- **Reproducción remota:** `JamendoPlaybackResolver` devuelve `RemoteUriResource`
+  con la URL de audio; `JamendoAudioCache` (solo memoria, TTL 10 min, 500) evita
+  repetir consultas; **no hay audio ni URLs en disco ni en SQLite** y no hay modo
+  offline.
+- **Artwork:** `RemoteArtworkReference` con `width=300`.
+- **Atribución:** `JamendoTrack.attribution` (`shareurl`, `license_ccurl`; el nombre
+  de la licencia se deriva de la URL).
+- Las licencias de las pistas son Creative Commons NC en general (uso no comercial).
+
+## `core/theme` y `core/widgets`
+
+`TakiColors` (paleta «Midnight + Taki Orange») y el resto de tokens
+(`TakiTypography`, `TakiSpacing`, `TakiRadius`, `TakiElevation`, `TakiMotion`,
+`TakiIconSize`) son tokens, no construyen temas; `AppTheme` los compone. Los
+widgets `Taki*` (`TakiSongTile`, `TakiButton`, `TakiSearchField`, `TakiArtwork`,
+`TakiEmptyState`, `TakiErrorState`, …) son solo presentación (ver
+`DESIGN_SYSTEM.md`). `song_actions.dart` define `ExtraSongAction` y el typedef
+`ShowSongActions` (la firma del menú que implementa `app/`). Un widget de
+`core/widgets` no importa ninguna feature ni `app/`.
+
+## Composition root
+
+**`main.dart`** crea, antes de `runApp`, lo que debe existir desde el arranque y lo
+inyecta con overrides de `ProviderScope`:
+
+| Qué crea | Provider que sobrescribe |
+|---|---|
+| `MediaStoreArtworkRepository` | `artworkRepositoryProvider` |
+| Jamendo (si hay `client_id`): `buildJamendoServices` | `jamendoServicesProvider`, `catalogSourcesProvider`, `attributionLookupProvider`, `artworkResolverProvider`, `songLookupProvider` (vía `songLookupOverride`) |
+| `HttpRemoteArtworkLoader` (una instancia) | `remoteArtworkLoaderProvider` y `initPlayer` |
+| `JustAudioPlayerAdapter` + `TakiAudioHandler` (`initPlayer`, con `SourcePlaybackResolver`) | `audioPlayerPortProvider`, `audioHandlerProvider` |
+| `Database` de sqflite (`TakiDatabase.tryOpen`) | `takiDatabaseProvider` (solo si abrió) |
+
+El resto de adapters se cablean en cada feature (`library_providers.dart`,
+`favorites_providers.dart`, `playlists_providers.dart`, `player_providers.dart`,
+`catalog_search_providers.dart`) con un valor por defecto que los tests
+sobrescriben.
 
 ## Base de datos local
 
-- `core/database/taki_database.dart` abre `taki.db` (sqflite), versión 2, con
-  `PRAGMA foreign_keys = ON` en cada conexión. `main.dart` la abre antes de
-  `runApp` y la inyecta en `takiDatabaseProvider`. Si falla, la app arranca
-  igual, favoritos y playlists se muestran como no disponibles y
-  "Reintentar" vuelve a abrirla.
-- Migraciones: subir `TakiDatabase.version`, añadir un bloque
-  `if (oldVersion < N)` en `_onUpgrade` y crear lo mismo en `_onCreate`.
-  Historial: v1 `favorites`; v2 `playlists` y `playlist_songs` (entradas con
-  posición contigua, la misma canción puede repetirse, borrado en cascada).
-- `favorites` y `playlist_songs` guardan el id de MediaStore y una copia de
-  respaldo (título, artista, álbum, duración, ruta). `SongMatcher`
-  (`core/domain`) reencuentra la canción; `GetFavoriteSongs` y
-  `GetPlaylistSongs` guardan el id nuevo si cambió y ocultan (sin borrar) lo
-  que no está en la biblioteca.
+`core/database/taki_database.dart` abre `taki.db` (sqflite), **versión 3**, con
+`PRAGMA foreign_keys = ON`. Si falla, la app arranca igual y favoritos/playlists se
+muestran como no disponibles («Reintentar»). Historial: v1 `favorites`; v2
+`playlists`/`playlist_songs`; v3 identifica la canción por `source` + `external_id`
+(texto) con copia verificada de los datos de v1/v2 (como `source='local'`).
+`favorites` tiene clave `(source, external_id)`; `playlist_songs` permite
+repetidos. Las columnas `title/artist/album/duration_ms/path` son una copia de
+respaldo (`path` solo para locales). Una canción que no se resuelve se **oculta,
+no se borra**.
+
+## Fuente local de canciones
+
+`SongRepository` (`library`) → `MediaStoreSongRepository` (canal nativo
+`taki/media_store`, `MediaStoreChannel.kt`, registrado como `FlutterPlugin` por
+`MainActivity`). `GetSongs` aplica `SongFilter` (descarta < 30 s y carpetas
+excluidas).
+
+## Android
+
+- **Permisos** (manifest principal): `INTERNET`, `READ_MEDIA_AUDIO`,
+  `READ_EXTERNAL_STORAGE` (`maxSdkVersion 32`), `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK`, `POST_NOTIFICATIONS`. Las
+  librerías añaden `ACCESS_NETWORK_STATE`. `<queries>` para `PROCESS_TEXT` y
+  `VIEW` http/https (enlaces externos).
+- **Servicios:** `com.ryanheise.audioservice.AudioService`
+  (`foregroundServiceType=mediaPlayback`) y `MediaButtonReceiver`.
+- `minSdk` 24, `targetSdk` 36, `compileSdk` 36, AGP 8.11.1, Kotlin 2.2.20, Java 17.
+  `applicationId` `com.limbermendoza.taki`. R8 activo en `release`.
+- El tráfico `http://` queda bloqueado por defecto (sin `cleartext`).
+
+## Build, release y firma
+
+Ver `README.md` para los comandos. La firma de producción: la keystore vive
+**fuera del repositorio**; `android/key.properties` (local) la describe; ambos están
+ignorados por Git. `buildTypes.release` usa `signingConfigs.release` y un release
+sin esos datos **falla** (nunca usa la clave de debug). Detalle en
+`PHASE_3_9B_PRODUCTION_SIGNING.md`.
 
 ## Testing
 
-`test/` replica la estructura de `lib/` (`app/`, `core/`, `features/`) y
-añade `helpers/` (fakes compartidos) y `architecture/`.
-
-- `domain`: tests unitarios puros.
-- `presentation`: widget tests sobrescribiendo providers
-  (`ProviderScope(overrides: [...])`) con fakes o mocks de `mocktail`.
-  `libraryOverrides()` (`test/helpers/library_fakes.dart`) sobrescribe los
-  ports de uso común, incluido `artworkRepositoryProvider`.
-- `infrastructure`: tests sin dispositivo. `JustAudioPlayerAdapter` con un
-  reproductor falso (`test/helpers/fake_just_audio_player.dart`),
-  `MediaStoreSongRepository` con un `MethodChannel` simulado, y los
-  repositorios sqflite y `TakiDatabase` con la base real en memoria vía
-  `sqflite_common_ffi`.
-- Sin tests automáticos: el código Kotlin (`MediaStoreChannel`) y el
-  comportamiento real de audio_service (notificación, pantalla de bloqueo).
+`test/` replica `lib/` y añade `helpers/` (fakes compartidos) y `architecture/`.
+Widget tests con `ProviderScope(overrides: …)` y fakes/`mocktail`; infraestructura
+sin dispositivo (adapter con reproductor falso, canal simulado, SQLite en memoria
+con `sqflite_common_ffi`, Jamendo con HTTP falso). El mutation testing se hizo
+manualmente por fase (resultados en cada `PHASE_3_*`). Sin tests automáticos: el
+Kotlin (`MediaStoreChannel`), el comportamiento real de audio_service, la apertura
+real de enlaces (`launchUrl`) y todo lo que requiere dispositivo (validado a mano en
+la 3.9).
 
 ### Test de arquitectura
 
-`test/architecture/dependency_rules_test.dart` lee los `import`/`export` de
-todos los archivos `.dart` de `lib/` (resuelve las rutas relativas y las
-`package:taki/...`; ignora `dart:`) y comprueba:
-
-1. **core no depende de app ni de features**: ningún archivo de `lib/core/`
-   importa `lib/app/` ni `lib/features/`.
-2. **Las features no dependen de app**: ningún archivo de
-   `lib/features/<x>/` importa `lib/app/`.
-3. **Sin imports entre features salvo las excepciones**: un import de
-   `features/<a>/…` a `features/<b>/…` (con `a ≠ b`) solo pasa si el par
-   exacto archivo → archivo está en su lista `_allowedCrossFeature` (las 6
-   de la tabla anterior).
-4. **Las excepciones siguen existiendo**: falla si alguna entrada de
-   `_allowedCrossFeature` ya no se usa, para que la lista no quede obsoleta.
-5. **`core/domain` es Dart puro**: sus imports de paquetes externos solo
-   pueden ser `package:equatable/`.
-
-Además comprueba que encontró imports (para no pasar en vacío).
-
-No comprueba (siguen siendo reglas de revisión manual): que el `domain` de
-cada feature sea Dart puro, que solo los `*_providers.dart` importen
-`infrastructure`, ni qué partes de `core` importa `core/domain`.
-
-**Añadir una excepción** requiere actualizar `_allowedCrossFeature` en el
-test y la tabla de este documento.
+`test/architecture/dependency_rules_test.dart` (**13 pruebas**) lee los
+`import`/`export` de `lib/` y comprueba: (1) que encuentra imports; (2) `core` no
+depende de `app` ni de features; (3) las features no dependen de `app`; (4) sin
+imports entre features salvo las **7** excepciones; (5) las excepciones siguen
+existiendo; (6) `core/domain` solo importa `equatable`; (7–10) `features/search`:
+solo importa de otra feature el provider del Player, no importa Jamendo, no depende
+de `app` y no menciona a ningún proveedor; (11) `features/player` no importa ni
+menciona Jamendo; (12) `features/playlists` tampoco; (13) `search` tiene una única
+excepción. **Añadir una excepción** requiere actualizar `_allowedCrossFeature` y la
+tabla de este documento.
 
 ## Decisiones
 
-- **Persistencia: `sqflite`** en lugar de `isar`. La última versión estable de
-  isar (3.1.0+1) no se mantiene desde 2023, falla con Android Gradle Plugin 8+
-  (falta `namespace`) y su generador de código entra en conflicto con versiones
-  recientes de `analyzer`/`build_runner`. `sqflite` es estable, mantenido y
-  suficiente para playlists, favoritos y ajustes.
+- **Persistencia: `sqflite`** (isar no se mantiene y falla con AGP 8+).
 - **Lectura de la biblioteca: canal nativo propio (MediaStore)** en lugar de
-  `on_audio_query`. El paquete original (2.9.0) está abandonado desde 2023 y no
-  compila con AGP 8+ (falta `namespace`). Su fork mantenido
-  (`on_audio_query_pluse`) compila, pero su código nativo exige además
-  `READ_MEDIA_IMAGES` (Android 13+) o `WRITE_EXTERNAL_STORAGE` (≤12) y falla
-  sin ellos. Pedir acceso a fotos no tiene sentido en un reproductor y Google
-  Play lo restringe. Los plugins de este tipo se abandonan con facilidad, así
-  que mantenemos ~200 líneas de Kotlin propias. Solo pedimos
-  `READ_MEDIA_AUDIO` (13+) y `READ_EXTERNAL_STORAGE` (≤12, `maxSdkVersion 32`).
-  El port `SongRepository` sigue siendo intercambiable.
-- **`permission_handler` fijado en 12.x.** La 13.x arrastra
-  `permission_handler_android` 14.x, que requiere Android Gradle Plugin 9; el
-  proyecto usa AGP 8.11. Subir cuando migremos a AGP 9.
-- **`device_info_plus`** para conocer la versión de Android y elegir el permiso
-  correcto (`Permission.audio` en 13+, `Permission.storage` antes).
-- **Cola con `AudioPlayer.setAudioSources`** (`ConcatenatingAudioSource` está
-  deprecado en just_audio 0.10) con `useLazyPreparation`. La cola completa no
-  se publica en la MediaSession: con miles de canciones puede superar el
-  límite de Binder de Android. Solo se publica la canción actual.
-- **Estado / DI: Riverpod.** **Navegación: go_router** con
-  `StatefulShellRoute.indexedStack` (cada pestaña conserva su estado).
-- **Dominio compartido en `core/domain`** (Fase 0.3): `Song` y lo que la
-  rodea lo usan todas las features; tenerlo en `library` obligaba a `player`
-  y `playlists` a depender de otra feature.
-- **Menú de canción inyectado por constructor** (Fase 0.3): combina tres
-  features, así que vive en `app/`; las páginas reciben un `ShowSongActions`
-  para no depender de `app/`.
+  `on_audio_query` (abandonado / exige permisos de fotos). Solo se pide
+  `READ_MEDIA_AUDIO` (13+) / `READ_EXTERNAL_STORAGE` (≤12).
+- **`permission_handler` fijado en 12.x** (la 13.x exige AGP 9) y
+  **`device_info_plus`** para elegir el permiso por versión de Android.
+- **Cola con `AudioPlayer.setAudioSources`** con `useLazyPreparation`; solo la
+  canción actual se publica en la MediaSession.
+- **Estado / DI: Riverpod. Navegación: go_router.**
+- **Dominio compartido en `core/domain`**: `Song` y lo que la rodea lo usan todas las
+  features.
+- **Identidad `(source, externalId)` opaca** y persistida como texto; `Song` universal
+  y `LocalSong` para lo local (Fases 2.x).
+- **Proveedores enchufados desde `app/`** y enrutados por fuente; ninguna feature ni
+  `core` nombra a Jamendo.
+- **Atribución provider-agnostic en `core`** y sin persistencia.
+- **Un solo cargador remoto de carátulas** compartido por la UI y la notificación.
+- **Menú de canción inyectado por constructor** (combina tres features, vive en `app/`).
 
-## Problemas conocidos
+## Limitaciones y deuda conocidas
 
-Detectados en la auditoría (Fase 0.1) y aún sin resolver:
+Hechos, no promesas (detalle en `PHASE_3_8_GLOBAL_POST_3_7B_AUDIT.md` y
+`PHASE_3_9_ANDROID_VALIDATION_RELEASE.md`):
 
-- `audioHandlerProvider` expone el tipo de infraestructura `TakiAudioHandler`
-  y ningún código lo lee.
-- `core/database` depende de `sqflite` y crea las tablas de `favorites` y
-  `playlists`: `core` conoce el esquema de dos features.
-- `core/constants/library_constants.dart` contiene constantes que solo usa
-  `library`.
-- `MediaStoreChannel` se registra desde `MainActivity`; si el engine se
-  creara sin la Activity, el canal no existiría (no verificado en
-  dispositivo).
-- `addToQueue` y `playNext` comprueban si la cola está vacía fuera de la
-  serialización de operaciones del adapter.
-- La firma de release usa la clave de debug.
-- `core/error` y `features/search` son carpetas vacías; `settings` solo tiene
-  una pantalla provisional.
+- **No implementado:** segunda fuente / selector / mezcla (D6), modo offline, descarga
+  de pistas, localización, Ajustes reales, AAB / Play App Signing (no evaluado).
+- **No verificado en dispositivo:** UI del lockscreen (el teléfono de prueba no tiene
+  bloqueo seguro), auriculares físicos, seek en pistas remotas, muerte del proceso por
+  el sistema, persistencia de `remote_*.img` entre reinicios en el release.
+- **Deuda técnica:**
+  - `addToQueue`/`playNext` comprueban la cola vacía fuera de la serialización del
+    adapter.
+  - Se resuelven todas las URLs remotas al encolar; las URLs de audio se fijan al
+    encolar.
+  - `HttpJamendoApi` reintenta hasta 3 veces una respuesta vacía.
+  - `RemoteUriResource` / el campo `audio` no validan el esquema.
+  - `ArtworkFileCache` no tiene límite ni limpieza.
+  - El fallo parcial de una fuente en Favoritos/Playlists es silencioso.
+  - `audioHandlerProvider` y `artworkResolverProvider` no tienen lectores.
+  - `core/database` conoce el esquema de dos features y
+    `core/constants/library_constants.dart` solo lo usa `library`.
+  - Algunos comentarios de código dicen «hoy no hay cargador/fuente remota».
+- **Deuda de UX observada en Android:** Reproduciendo muestra «REPRODUCIENDO DESDE
+  Biblioteca» también para pistas remotas; la pantalla de permiso dice «Nada sale de
+  tu dispositivo»; Favoritos queda en error tras un recálculo sin red hasta pulsar
+  «Reintentar»; con el permiso denegado la lista de playlists cuenta canciones que el
+  detalle oculta.
