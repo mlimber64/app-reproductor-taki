@@ -440,6 +440,7 @@ class _Header extends StatelessWidget {
       Duration.zero,
       (sum, item) => sum + item.song.duration,
     );
+    final hiddenCount = playlist.songCount - items.length;
     // Las 4 primeras canciones *visibles* (las ausentes de la biblioteca no
     // están en `items`); no `Playlist.coverIdentities`, como usa la lista.
     final coverArtwork = playlistCoverArtwork(
@@ -491,7 +492,13 @@ class _Header extends StatelessWidget {
                     ),
                     const SizedBox(height: TakiSpacing.xs),
                     Text(
-                      formatSongsSummary(items.length, total),
+                      // Entries hidden because their source is unavailable
+                      // (e.g. local songs without the music permission) are
+                      // still counted by the playlist, so say so.
+                      hiddenCount > 0
+                          ? '${formatSongsSummary(items.length, total)} · '
+                              '$hiddenCount no disponibles'
+                          : formatSongsSummary(items.length, total),
                       style: TakiTypography.trackSubtitle.copyWith(
                         color: TakiColors.textSecondary,
                       ),

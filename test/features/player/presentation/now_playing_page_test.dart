@@ -22,11 +22,15 @@ import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/pages/now_playing_page.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 
+import 'package:taki/core/catalog/catalog_sources_providers.dart';
+import 'package:taki/core/domain/entities/catalog_provider_info.dart';
 import 'package:taki/core/domain/entities/music_identity.dart';
+import 'package:taki/core/domain/services/source_catalog_sources.dart';
 import 'package:taki/core/links/external_link_providers.dart';
 import 'package:taki/core/lookup/attribution_lookup_providers.dart';
 
 import '../../../helpers/attribution_fakes.dart';
+import '../../../helpers/catalog_fakes.dart';
 import '../../../helpers/universal_song.dart';
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
@@ -710,6 +714,12 @@ void main() {
           overrides: [
             attributionLookupProvider.overrideWithValue(lookup),
             externalLinkOpenerProvider.overrideWithValue(opener),
+            catalogSourcesProvider.overrideWithValue(SourceCatalogSources([
+              CatalogSourceRegistration(
+                CatalogProviderInfo(source: 'jamendo', label: 'Jamendo'),
+                FakeCatalogSearch(),
+              ),
+            ])),
           ],
         );
 
@@ -727,6 +737,14 @@ void main() {
       await tester.tap(find.text('Ver canción'));
       await tester.pump();
       expect(opener.opened, [pageUrl]);
+    });
+
+    testWidgets('the top bar names the source of a remote song',
+        (tester) async {
+      await open(tester);
+      expect(find.text('REPRODUCIENDO DESDE'), findsOneWidget);
+      expect(find.text('Jamendo'), findsOneWidget);
+      expect(find.text('Biblioteca'), findsNothing);
     });
 
     testWidgets('mientras carga, los controles y la carátula ya están',

@@ -42,6 +42,9 @@ class FavoritesPage extends ConsumerWidget {
         // Al recalcular (p. ej. tras marcar un favorito) se mantiene la
         // lista anterior en vez de parpadear con el indicador.
         skipLoadingOnReload: true,
+        // A failed recalculation (e.g. offline) keeps the last good list
+        // instead of replacing it with the error state.
+        skipError: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => TakiErrorState(
           title: 'Favoritos no disponibles',

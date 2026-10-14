@@ -77,7 +77,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ? 'El permiso está desactivado. Actívalo en los ajustes de '
                       'la app, en Permisos → Música y audio.'
                   : 'Solo leemos las canciones guardadas en tu teléfono. '
-                      'Nada sale de tu dispositivo.',
+                      'Tus archivos no se envían a ningún sitio.',
               action: TakiStateAction(
                 label: permanentlyDenied ? 'Abrir ajustes' : 'Permitir acceso',
                 onPressed: notifier.requestPermission,

@@ -47,8 +47,7 @@ final class LocalUriResource extends PlaybackResource {
 /// URI de red que un reproductor de URI puede abrir.
 ///
 /// Se distingue de [LocalUriResource] porque tiene otra semántica: puede
-/// caducar ([expiresAt]) y puede fallar por motivos de red. Hoy no hay ninguna
-/// fuente que la produzca.
+/// caducar ([expiresAt]) y puede fallar por motivos de red. Remote sources produce it.
 final class RemoteUriResource extends PlaybackResource {
   RemoteUriResource(this.uri, {this.expiresAt}) {
     _requireNotBlank(uri, 'uri');

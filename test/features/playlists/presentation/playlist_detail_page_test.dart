@@ -151,7 +151,7 @@ void main() {
 
     expect(find.text('PLAYLIST'), findsOneWidget);
     expect(find.text('Mi mix'), findsOneWidget);
-    expect(find.text('2 canciones · 4 min'), findsOneWidget);
+    expect(find.text('2 canciones · 4 min · 1 no disponibles'), findsOneWidget);
     expect(find.text('Borrada'), findsNothing);
     expect(
       tester.getTopLeft(find.text('C')).dy,

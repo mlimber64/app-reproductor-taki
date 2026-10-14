@@ -10,8 +10,8 @@
 /// - [UnavailableArtworkReference]: se sabe que no hay carátula.
 ///
 /// Dart puro, inmutable, con igualdad por valor (sirve de clave de caché).
-/// Existir no significa que Taki la descargue: hoy ninguna fuente produce una
-/// [RemoteArtworkReference] y no hay cargador de red.
+/// Existing does not mean Taki downloads it: a remote reference is only loaded
+/// when a `RemoteArtworkLoader` is available.
 sealed class ArtworkReference {
   const ArtworkReference();
 }

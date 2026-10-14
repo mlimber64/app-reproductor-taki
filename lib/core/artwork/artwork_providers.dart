@@ -17,18 +17,16 @@ final artworkRepositoryProvider = Provider<ArtworkRepository>(
   ),
 );
 
-/// Resolvedor de carátulas por canción: enruta por fuente. Hoy solo la local;
-/// un proveedor futuro se añade al mapa. Aún no lo consume la UI (que sigue
-/// pasando `song.artwork` a `AlbumArtworkBuilder.reference`).
+/// Per-song artwork resolver: routes by source. Only the local source is
+/// registered here; remote sources are wired in `lib/app`.
 final artworkResolverProvider = Provider<ArtworkResolver>(
   (ref) => SourceArtworkResolver({
     localMusicSource: const LocalArtworkResolver(),
   }),
 );
 
-/// Cargador de carátulas remotas. Hoy no hay ninguno (`null`): las referencias
-/// remotas se tratan como ausentes. Una fase posterior lo sobrescribirá, p. ej.
-/// con `HttpRemoteArtworkLoader(const IoArtworkHttpClient())`.
+/// Remote artwork loader. `null` by default, in which case remote references
+/// are treated as absent; the app overrides it with an `HttpRemoteArtworkLoader`.
 final remoteArtworkLoaderProvider = Provider<RemoteArtworkLoader?>((ref) => null);
 
 final artworkCacheProvider = Provider<ArtworkCache>(

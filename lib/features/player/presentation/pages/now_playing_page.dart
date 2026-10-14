@@ -4,7 +4,9 @@ import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/artwork/album_artwork_builder.dart';
+import '../../../../core/catalog/catalog_sources_providers.dart';
 import '../../../../core/domain/entities/artwork_reference.dart';
+import '../../../../core/domain/entities/local_music_identity.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_icon_size.dart';
@@ -161,7 +163,7 @@ class _PortraitLayout extends StatelessWidget {
       return SingleChildScrollView(
         child: Column(
           children: [
-            _TopBar(onClose: onClose),
+            _TopBar(song: song, onClose: onClose),
             const SizedBox(height: TakiSpacing.lg),
             _Artwork(
               artwork: song.artwork,
@@ -175,7 +177,7 @@ class _PortraitLayout extends StatelessWidget {
 
     return Column(
       children: [
-        _TopBar(onClose: onClose),
+        _TopBar(song: song, onClose: onClose),
         const SizedBox(height: TakiSpacing.lg),
         Expanded(
           child: LayoutBuilder(
@@ -208,7 +210,7 @@ class _LandscapeLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _TopBar(onClose: onClose),
+        _TopBar(song: song, onClose: onClose),
         const SizedBox(height: TakiSpacing.sm),
         Expanded(
           child: Row(
@@ -288,15 +290,27 @@ class _BottomActions extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.onClose});
+class _TopBar extends ConsumerWidget {
+  const _TopBar({required this.song, required this.onClose});
 
   static const double _height = 56;
 
+  final Song song;
   final VoidCallback onClose;
 
+  /// Display name of the source the song comes from. Local songs never touch
+  /// the catalog registry; an unregistered source gets a neutral label.
+  static String _originLabel(WidgetRef ref, Song song) {
+    final source = song.musicIdentity.source;
+    if (source == localMusicSource) return 'Biblioteca';
+    for (final provider in ref.watch(catalogSourcesProvider).available) {
+      if (provider.source == source) return provider.label;
+    }
+    return 'En línea';
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SizedBox(
       height: _height,
       child: Row(
@@ -321,8 +335,7 @@ class _TopBar extends StatelessWidget {
                 ),
                 const SizedBox(height: TakiSpacing.xxs),
                 Text(
-                  // Origen fijo (I14): pendiente de conocer el real.
-                  'Biblioteca',
+                  _originLabel(ref, song),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TakiTypography.body.copyWith(
