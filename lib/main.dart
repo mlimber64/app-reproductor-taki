@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
+import 'app/audius_wiring.dart';
 import 'app/jamendo_wiring.dart';
 import 'app/song_lookup_wiring.dart';
 import 'core/artwork/artwork_providers.dart';
@@ -22,15 +23,17 @@ Future<void> main() async {
 
   // Carátulas de MediaStore: las usan la UI y la notificación del reproductor.
   final artwork = MediaStoreArtworkRepository();
-  // Jamendo solo se cablea si hay JAMENDO_CLIENT_ID (--dart-define).
+  // Jamendo is only wired when JAMENDO_CLIENT_ID is set (--dart-define).
   const http = IoArtworkHttpClient();
   final jamendo = buildJamendoServices(http);
+  // Audius needs no key: it is always available.
+  final audius = buildAudiusServices(http);
   // Una sola instancia: la usan la UI (override de abajo) y la notificación /
   // pantalla de bloqueo (ArtworkFileCache) para las carátulas remotas.
   final remoteArtworkLoader = HttpRemoteArtworkLoader(http);
   final playback = await initPlayer(
     artwork: artwork,
-    resolver: buildPlaybackResolver(jamendo),
+    resolver: buildPlaybackResolver(jamendo, audius: audius),
     remoteArtworkLoader: remoteArtworkLoader,
   );
   // Si la base no abre, la app arranca igual: los favoritos se muestran como
@@ -42,12 +45,14 @@ Future<void> main() async {
       overrides: [
         artworkRepositoryProvider.overrideWithValue(artwork),
         jamendoServicesProvider.overrideWithValue(jamendo),
+        audiusServicesProvider.overrideWithValue(audius),
         artworkResolverProvider
-            .overrideWithValue(buildArtworkResolver(jamendo)),
+            .overrideWithValue(buildArtworkResolver(jamendo, audius: audius)),
         remoteArtworkLoaderProvider.overrideWithValue(remoteArtworkLoader),
-        catalogSourcesProvider.overrideWithValue(buildCatalogSources(jamendo)),
+        catalogSourcesProvider
+            .overrideWithValue(buildCatalogSources(jamendo, audius: audius)),
         attributionLookupProvider
-            .overrideWithValue(buildAttributionLookup(jamendo)),
+            .overrideWithValue(buildAttributionLookup(jamendo, audius: audius)),
         songLookupOverride(),
         audioPlayerPortProvider.overrideWithValue(playback.player),
         audioHandlerProvider.overrideWithValue(playback.handler),

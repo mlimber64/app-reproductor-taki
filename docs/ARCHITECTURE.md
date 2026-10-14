@@ -374,10 +374,11 @@ lectura.
 Vaciar la caché de carátulas solo borra archivos regenerables: no toca
 canciones, favoritos ni playlists.
 
-## Jamendo (proveedor actual)
+## Jamendo
 
-`features/jamendo` (domain + infrastructure) es el **único** proveedor remoto.
-Toda la lógica específica vive ahí; `core` no la conoce.
+`features/jamendo` (domain + infrastructure) es uno de los dos proveedores remotos
+(el otro es Audius, abajo). Toda la lógica específica vive ahí; `core` no la
+conoce.
 
 - **Credencial:** `JAMENDO_CLIENT_ID` por `--dart-define` (formato validado: 4–64
   `[A-Za-z0-9_-]`). Sin él, Jamendo **no se registra**: no hay pestaña Buscar y la
@@ -400,6 +401,34 @@ Toda la lógica específica vive ahí; `core` no la conoce.
 - **Atribución:** `JamendoTrack.attribution` (`shareurl`, `license_ccurl`; el nombre
   de la licencia se deriva de la URL).
 - Las licencias de las pistas son Creative Commons NC en general (uso no comercial).
+
+## Audius
+
+`features/audius` (domain + infrastructure) tiene la misma forma que Jamendo y se
+cablea en `app/audius_wiring.dart`. Se registra siempre: no necesita credencial.
+
+- **API:** `HttpAudiusApi` (`api.audius.co`, `app_name=taki`, 10 s, 4 MB).
+  `searchTracks`, `trending` (semana/mes, opcional género), `underground` y
+  `tracksByIds` (un `id` repetido por pista).
+- **Descubrimiento:** semana y mes son los charts `trending`; **Novedades** usa
+  `trending/underground` (pistas emergentes y recientes, sin el spam de ordenar por
+  fecha); un género se traduce con `audiusGenres` a los nombres cerrados de Audius
+  y uno desconocido devuelve una página vacía.
+- **Parser:** omite pistas borradas, sin `is_streamable` o con `access.stream`
+  falso; `rawCount` cuenta lo recibido para que la paginación no se confunda.
+- **Reproducción:** `AudiusPlaybackResolver` comprueba la pista por id (single
+  flight por identidad) y devuelve `RemoteUriResource` con
+  `/v1/tracks/{id}/stream`. Esa URL redirige a un nodo con firma nueva cada vez,
+  así que **no hay nada que caduque ni que cachear**.
+- **Artwork:** `RemoteArtworkReference` de 480 px.
+- **Atribución:** enlace a `audius.co` solo desde un `permalink` bien formado; la
+  licencia es el texto que declaró el artista (`licenseName`, sin `licenseUrl`).
+  No se presenta como libre lo que no lo es.
+- **Selección de fuente:** `selectedCatalogSourceProvider` guarda la preferencia y
+  `activeCatalogSourceProvider` decide la efectiva (la elegida si sigue
+  registrada, si no la primera). Los resultados de dos fuentes **no se mezclan**
+  (la política multi-fuente D6 sigue abierta). Cambiar de fuente repite la
+  búsqueda escrita sobre la nueva.
 
 ## `core/theme` y `core/widgets`
 

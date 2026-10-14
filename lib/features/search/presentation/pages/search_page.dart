@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/artwork/album_artwork_builder.dart';
+import '../../../../core/catalog/catalog_sources_providers.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_spacing.dart';
@@ -105,6 +106,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               onSubmitted: notifier.submit,
             ),
           ),
+          _SourcePicker(onSelected: _selectSource),
           Expanded(child: _body(state, notifier)),
         ],
       ),
@@ -156,6 +158,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     };
   }
 
+  /// Switches the catalog source and, if there is text in the field, searches
+  /// it again on the new source (the results of the old one are dropped).
+  void _selectSource(String source) {
+    ref.read(selectedCatalogSourceProvider.notifier).select(source);
+    // Reading the state first rebuilds the search with the new source.
+    ref.read(catalogSearchProvider);
+    ref.read(catalogSearchProvider.notifier).submit(_controller.text);
+  }
+
   /// ⋯ o pulsación larga: el menú de acciones de siempre, con la `Song` tal
   /// cual (su `MusicIdentity` no se toca). No cambia lo que hace el tap.
   Future<void> _actions(Song song) async {
@@ -179,6 +190,46 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     await ref.read(playSongsProvider).call([song], 0);
     // Después de arrancar: si se rechaza, la música sigue sonando.
     unawaited(ref.read(notificationPermissionProvider).requestIfNeeded());
+  }
+}
+
+/// Chips to pick which catalog is searched and browsed. Hidden with a single
+/// source: there is nothing to choose.
+class _SourcePicker extends ConsumerWidget {
+  const _SourcePicker({required this.onSelected});
+
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sources = ref.watch(catalogSourcesProvider).available;
+    if (sources.length < 2) return const SizedBox.shrink();
+    final active = ref.watch(activeCatalogSourceProvider);
+
+    return Semantics(
+      container: true,
+      label: SearchTexts.sourcePickerLabel,
+      child: SizedBox(
+        height: 48,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(
+            horizontal: TakiSpacing.pageGutter,
+            vertical: TakiSpacing.xs,
+          ),
+          itemCount: sources.length,
+          separatorBuilder: (_, _) => const SizedBox(width: TakiSpacing.sm),
+          itemBuilder: (context, index) {
+            final info = sources[index];
+            return ChoiceChip(
+              label: Text(info.label),
+              selected: info.source == active,
+              onSelected: (_) => onSelected(info.source),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 

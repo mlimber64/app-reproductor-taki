@@ -107,7 +107,7 @@ void main() {
     expect(files, isNotEmpty);
     final offenders = [
       for (final file in files)
-        if (RegExp('jamendo', caseSensitive: false)
+        if (RegExp('jamendo|audius', caseSensitive: false)
             .hasMatch(file.readAsStringSync()))
           file.path,
     ];
@@ -128,7 +128,7 @@ void main() {
           .listSync(recursive: true)
           .whereType<File>()
           .where((f) => f.path.endsWith('.dart')))
-        if (RegExp('jamendo', caseSensitive: false)
+        if (RegExp('jamendo|audius', caseSensitive: false)
             .hasMatch(file.readAsStringSync()))
           file.path,
     ];
@@ -149,7 +149,7 @@ void main() {
           .listSync(recursive: true)
           .whereType<File>()
           .where((f) => f.path.endsWith('.dart')))
-        if (RegExp('jamendo', caseSensitive: false)
+        if (RegExp('jamendo|audius', caseSensitive: false)
             .hasMatch(file.readAsStringSync()))
           file.path,
     ];

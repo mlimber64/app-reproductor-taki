@@ -11,6 +11,7 @@ abstract final class SearchTexts {
 
   static const String featuredSectionFailed = 'No pudimos cargar esta sección';
   static const String featuredLoading = 'Cargando canciones';
+  static const String sourcePickerLabel = 'Fuente del catálogo';
 
   static const String emptyTitle = 'No encontramos música';
   static const String emptyMessage = 'Prueba con otro título.';

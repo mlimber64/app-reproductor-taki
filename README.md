@@ -26,8 +26,10 @@ licencias Creative Commons de uso no comercial.
   de menos de 30 s y los de carpetas como notas de voz, grabaciones o tonos. Pide
   solo el permiso de audio (`READ_MEDIA_AUDIO` en Android 13+,
   `READ_EXTERNAL_STORAGE` antes). Pull-to-refresh vuelve a escanear.
-- **Catálogo remoto (Jamendo)**: pestaña **Buscar** (solo si hay credencial), con
-  búsqueda desde 2 caracteres, paginación y sin resultados duplicados.
+- **Catálogo remoto (Jamendo y Audius)**: pestaña **Buscar**, con búsqueda desde 2
+  caracteres, paginación y sin resultados duplicados. Con más de una fuente, unos
+  chips arriba eligen cuál se busca y se explora. Jamendo requiere credencial;
+  Audius no.
 - **Reproducción local y remota** en segundo plano, con notificación y sesión de
   medios (controles de notificación, de bloqueo y de auriculares/Bluetooth),
   mini reproductor y pantalla **Reproduciendo** (carátula, progreso, anterior/
@@ -44,7 +46,7 @@ licencias Creative Commons de uso no comercial.
   enlaces a la canción y a la licencia, que se abren en el navegador).
 - **Aviso discreto** cuando una canción no se puede reproducir.
 
-No hay modo offline para las pistas remotas, ni descargas, ni un segundo proveedor.
+No hay modo offline para las pistas remotas ni descargas.
 
 ## Jamendo
 
@@ -57,7 +59,16 @@ flutter run --dart-define=JAMENDO_CLIENT_ID=<CLIENT_ID>
 `<CLIENT_ID>` es un `client_id` de la API de Jamendo (se obtiene en su portal de
 desarrolladores). **No se guarda en el repositorio**: se pasa por línea de comandos
 o variable local. Sin él, Taki funciona solo con la biblioteca local y no aparece la
-pestaña Buscar. Tenga en cuenta que el valor queda dentro de la APK compilada.
+pestaña Jamendo en Buscar. Tenga en cuenta que el valor queda dentro de la APK
+compilada.
+
+## Audius
+
+Audius no necesita credencial: siempre está disponible, así que Buscar existe
+aunque no haya `JAMENDO_CLIENT_ID`. Es música independiente en streaming, pero
+**no garantiza una licencia libre**: muchas pistas declaran «All rights reserved»
+o ninguna. Reproduciendo muestra la licencia que declaró el artista y un enlace a
+la pista en audius.co, sin presentarla como Creative Commons.
 
 ## Stack
 

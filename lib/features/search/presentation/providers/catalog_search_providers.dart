@@ -17,27 +17,58 @@ final catalogSearchPolicyProvider =
 final searchSchedulerProvider =
     Provider<SearchScheduler>((ref) => const TimerSearchScheduler());
 
-/// Búsqueda sobre el catálogo registrado, o `null` si no hay ninguno.
-///
-/// Con una sola fuente usa esa; con varias usa la primera registrada, de forma
-/// provisional (la política multi-fuente, D6, sigue pendiente: sin ranking ni
-/// mezcla).
+/// The source the user picked in the search screen, or `null` for "the
+/// default". It is only a preference: [activeCatalogSourceProvider] decides
+/// what is really used.
+final selectedCatalogSourceProvider =
+    NotifierProvider<SelectedCatalogSource, String?>(SelectedCatalogSource.new);
+
+class SelectedCatalogSource extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String source) => state = source;
+}
+
+/// The source search and discovery use: the picked one while it is still
+/// registered, otherwise the first registered. `null` when there is none.
+final activeCatalogSourceProvider = Provider<String?>((ref) {
+  final available = ref.watch(catalogSourcesProvider).available;
+  if (available.isEmpty) return null;
+  final selected = ref.watch(selectedCatalogSourceProvider);
+  for (final info in available) {
+    if (info.source == selected) return selected;
+  }
+  return available.first.source;
+});
+
+/// Search over the active source, or `null` if there is no catalog. Results of
+/// different sources are never mixed (the multi-source ranking policy, D6, is
+/// still open): the user picks the source.
 final searchCatalogProvider = Provider<SearchCatalog?>((ref) {
   final sources = ref.watch(catalogSourcesProvider);
   final policy = ref.watch(catalogSearchPolicyProvider);
-  if (!sources.isAvailable) return null;
+  final active = ref.watch(activeCatalogSourceProvider);
+  if (active == null) return null;
   return SearchCatalog(
-    sources.searchIn(sources.available.first.source),
+    sources.searchIn(active),
     pageSize: policy.pageSize,
   );
 });
 
-/// Featured songs of the first registered source that can be browsed, or
-/// `null` when none can (the screen then keeps its plain idle view).
+/// Featured songs of the active source when it can be browsed, else of the
+/// first registered source that can; `null` when none can (the screen then
+/// keeps its plain idle view).
 final featuredCatalogProvider = Provider<GetFeaturedSongs?>((ref) {
   final sources = ref.watch(catalogSourcesProvider);
-  for (final info in sources.available) {
-    final browse = sources.browseIn(info.source);
+  final active = ref.watch(activeCatalogSourceProvider);
+  final order = [
+    ?active,
+    for (final info in sources.available)
+      if (info.source != active) info.source,
+  ];
+  for (final source in order) {
+    final browse = sources.browseIn(source);
     if (browse != null) return GetFeaturedSongs(browse);
   }
   return null;

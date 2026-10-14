@@ -15,6 +15,7 @@ import '../core/domain/services/local_playback_resolver.dart';
 import '../core/domain/services/source_attribution_lookup.dart';
 import '../core/domain/services/source_catalog_sources.dart';
 import '../core/domain/services/source_playback_resolver.dart';
+import '../features/audius/domain/entities/audius_track.dart';
 import '../features/jamendo/domain/entities/jamendo_track.dart';
 import '../features/jamendo/domain/ports/jamendo_api.dart';
 import '../features/jamendo/domain/services/caching_jamendo_api.dart';
@@ -26,6 +27,7 @@ import '../features/jamendo/domain/services/jamendo_playback_resolver.dart';
 import '../features/jamendo/domain/services/jamendo_song_lookup.dart';
 import '../features/jamendo/infrastructure/http_jamendo_api.dart';
 import '../features/jamendo/infrastructure/jamendo_credentials.dart';
+import 'audius_wiring.dart';
 
 /// Piezas del proveedor Jamendo ya cableadas.
 class JamendoServices {
@@ -72,21 +74,32 @@ JamendoServices? buildJamendoServices(
   return buildJamendoServicesFor(HttpJamendoApi(http, credentials));
 }
 
-PlaybackResolver buildPlaybackResolver(JamendoServices? jamendo) =>
+PlaybackResolver buildPlaybackResolver(
+  JamendoServices? jamendo, {
+  AudiusServices? audius,
+}) =>
     SourcePlaybackResolver({
       localMusicSource: const LocalPlaybackResolver(),
       if (jamendo != null) jamendoSource: jamendo.playback,
+      if (audius != null) audiusSource: audius.playback,
     });
 
 /// Atribuciones por identidad: Jamendo solo si está cableado; sin él, toda
 /// identidad es `absent`.
-AttributionLookup buildAttributionLookup(JamendoServices? jamendo) =>
+AttributionLookup buildAttributionLookup(
+  JamendoServices? jamendo, {
+  AudiusServices? audius,
+}) =>
     SourceAttributionLookup({
       if (jamendo != null) jamendoSource: jamendo.attribution,
+      if (audius != null) audiusSource: audius.attribution,
     });
 
 /// Catálogos disponibles: Jamendo solo si está cableado; sin él, ninguno.
-CatalogSources buildCatalogSources(JamendoServices? jamendo) =>
+CatalogSources buildCatalogSources(
+  JamendoServices? jamendo, {
+  AudiusServices? audius,
+}) =>
     SourceCatalogSources([
       if (jamendo != null)
         CatalogSourceRegistration(
@@ -94,12 +107,22 @@ CatalogSources buildCatalogSources(JamendoServices? jamendo) =>
           jamendo.search,
           browse: jamendo.browse,
         ),
+      if (audius != null)
+        CatalogSourceRegistration(
+          CatalogProviderInfo(source: audiusSource, label: audiusProviderName),
+          audius.search,
+          browse: audius.browse,
+        ),
     ]);
 
-ArtworkResolver buildArtworkResolver(JamendoServices? jamendo) =>
+ArtworkResolver buildArtworkResolver(
+  JamendoServices? jamendo, {
+  AudiusServices? audius,
+}) =>
     SourceArtworkResolver({
       localMusicSource: const LocalArtworkResolver(),
       if (jamendo != null) jamendoSource: const SongArtworkResolver(),
+      if (audius != null) audiusSource: const SongArtworkResolver(),
     });
 
 final jamendoServicesProvider = Provider<JamendoServices?>((ref) => null);
