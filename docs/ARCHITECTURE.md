@@ -346,11 +346,57 @@ TakiArtwork             solo presentación
 - `ExternalLinkOpener` (puerto) / `UrlLauncherLinkOpener` abre el navegador del
   sistema; `openableUrl` solo admite `http(s)` con host.
 
+## Reproduciendo: color, letra, temporizador y ecualizador
+
+Todo cuelga de `features/player` salvo lo que otras features también necesitan.
+
+- **Color dinámico.** `core/utils/dominant_color.dart` (`dominantColor`,
+  `backdropTint`) elige el color de una carátula a partir de sus píxeles RGBA
+  (cubos de 16 niveles, más peso a lo vivo, sin casi negro ni casi blanco).
+  `ArtworkTint` (`core/widgets`) lo lee de la **misma** imagen que ya se dibuja:
+  no pide nada más a la caché de carátulas. `NowPlayingPage` lo usa de fondo
+  con un degradado animado.
+- **Letra.** El puerto `LyricsSource` y `Lyrics`/`LyricLine`/`LyricsQuery`, junto
+  con `parseLrc`, viven en `core/domain`; `lyricsProvider` (`core/lyrics`) es un
+  `FutureProvider.family` que se sobrescribe en `main`. `features/lyrics`
+  solo tiene infraestructura: `LrclibLyricsSource` (`/api/get` y, si no hay
+  coincidencia, `/api/search` con tolerancia de duración, prefiriendo la
+  sincronizada) sobre el `ArtworkHttpClient` genérico. **Solo se consulta al
+  abrir la hoja de letra**, porque envía título y artista a un tercero; la
+  pantalla de Ajustes lo declara. La hoja resalta la línea actual con la
+  posición del reproductor y un toque en una línea hace seek.
+- **Temporizador de sueño.** `SleepTimerController` (`player/presentation`)
+  cuenta atrás por segundos o espera el final de la canción (cambio de pista o
+  posición a menos de 600 ms del final) y entonces llama a `pause`. No
+  persiste: es una acción puntual.
+- **Ecualizador.** `EqualizerPort` (dominio del reproductor) y
+  `JustAudioEqualizer` sobre `AndroidEqualizer`, que se declara en el
+  `AudioPipeline` del `AudioPlayer` creado en `initPlayer`. Android solo informa
+  de las bandas tras empezar a reproducir, así que `load()` puede dar `null`
+  («no disponible aún») y el controlador vuelve a leer cuando suena una canción.
+  `EqualizerPreset` es una curva de cinco puntos que se interpola al número de
+  bandas del dispositivo. Los ajustes se guardan en `preferences`.
+- **Preferencias.** `PreferencesStore` (`core/domain/ports`) es un
+  clave/valor de texto sobre la tabla `preferences` (`SqflitePreferencesStore`).
+  Su uso es de mejor esfuerzo: un fallo nunca deshace lo que el usuario oye.
+
+## Historial
+
+La base pasa a v4 con `play_history` (una fila por identidad: última
+reproducción y recuento, máximo 200) y `preferences`. `features/library` guarda
+el puerto `PlayHistoryRepository`, `SqflitePlayHistoryRepository` y
+`GetRecentSongs` (identidades → canciones con el `SongLookup`, de cualquier
+fuente; lo que no se resuelve se oculta, no se olvida). El carrusel
+«Escuchado recientemente» (`RecentlyPlayedSection`) no ocupa espacio sin
+historial. **Quién escribe** es `app/play_history_wiring.dart`, porque solo la
+raíz de composición conoce a la vez el reproductor y la biblioteca: así no hace
+falta otra excepción entre features.
+
 ## Ajustes
 
 `features/settings` sigue la misma estructura hexagonal que el resto. **No hay
-preferencias persistidas**: cada fila es una acción o información de solo
-lectura.
+preferencias persistidas propias**: cada fila es una acción o información de solo
+lectura. (El almacén `preferences` existe, pero hoy solo lo usa el ecualizador.)
 
 - **Dominio** (`domain/`): `AppInfo` (versión, build, plataforma),
   `StorageUsage` (bytes y archivos), los puertos `AppInfoPort` y

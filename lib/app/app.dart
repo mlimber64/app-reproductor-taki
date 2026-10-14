@@ -6,6 +6,7 @@ import '../app/router.dart';
 import '../app/theme/app_theme.dart';
 import '../features/library/presentation/providers/favorites_providers.dart';
 import '../features/player/presentation/widgets/playback_error_listener.dart';
+import 'play_history_wiring.dart';
 
 class TakiApp extends ConsumerWidget {
   const TakiApp({super.key});
@@ -21,6 +22,8 @@ class TakiApp extends ConsumerWidget {
     // carga o se refresca se reencuentran (y se corrigen) los ids, sin
     // esperar a que se abra la pestaña Favoritos.
     ref.listen(favoriteSongsProvider, (_, _) {});
+    // Writes every song that starts playing to the history.
+    ref.watch(playHistoryRecorderProvider);
 
     return MaterialApp.router(
       title: 'Taki',

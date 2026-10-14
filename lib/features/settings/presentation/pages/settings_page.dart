@@ -237,7 +237,9 @@ class _PrivacySection extends StatelessWidget {
           icon: Icons.shield_outlined,
           title: 'Tus datos',
           subtitle: 'Tus favoritos y playlists se guardan solo en este '
-              'teléfono. Taki no tiene cuentas ni servidor propio',
+              'teléfono. Taki no tiene cuentas ni servidor propio. La letra de una '
+              'canción se consulta en LRCLIB, con su título y artista, solo '
+              'cuando la abres',
         ),
       ],
     );

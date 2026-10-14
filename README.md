@@ -34,6 +34,12 @@ licencias Creative Commons de uso no comercial.
   medios (controles de notificación, de bloqueo y de auriculares/Bluetooth),
   mini reproductor y pantalla **Reproduciendo** (carátula, progreso, anterior/
   siguiente, aleatorio y repetir).
+- **Reproduciendo con color dinámico**: el fondo toma el color dominante de la
+  carátula. Desde ahí: **letra sincronizada** (LRCLIB; se consulta solo al
+  abrirla, con el título y el artista), **temporizador de sueño** (15/30/45/60
+  min o al terminar la canción) y **ecualizador** con presets (se guarda).
+- **Escuchado recientemente**: carrusel en Biblioteca con lo último que sonó
+  (local o en línea), guardado solo en este teléfono.
 - **Cola**: reproducir a continuación, añadir al final, reordenar, quitar (con
   deshacer) y limpiar lo que viene. Tocar un resultado de búsqueda reproduce solo
   esa canción; desde ⋯ se puede añadir a la cola, a favoritos o a una playlist.

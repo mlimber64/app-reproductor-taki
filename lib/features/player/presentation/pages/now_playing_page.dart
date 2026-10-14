@@ -12,6 +12,8 @@ import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_icon_size.dart';
 import '../../../../core/theme/taki_spacing.dart';
 import '../../../../core/theme/taki_typography.dart';
+import '../../../../core/utils/dominant_color.dart';
+import '../../../../core/widgets/artwork_tint.dart';
 import '../../../../core/widgets/taki_artwork.dart';
 import '../../../../core/widgets/taki_button.dart';
 import '../../../../core/widgets/taki_icon_button.dart';
@@ -20,7 +22,11 @@ import '../../../../core/widgets/taki_progress_bar.dart';
 import '../../../library/presentation/providers/favorites_providers.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
+import '../providers/sleep_timer_providers.dart';
 import '../widgets/attribution_section.dart';
+import '../widgets/equalizer_sheet.dart';
+import '../widgets/lyrics_sheet.dart';
+import '../widgets/sleep_timer_sheet.dart';
 
 /// Pantalla completa de la canción que suena.
 ///
@@ -88,39 +94,78 @@ class _NowPlayingPageState extends ConsumerState<NowPlayingPage> {
 
     return Scaffold(
       backgroundColor: TakiColors.background,
-      body: GestureDetector(
-        onVerticalDragUpdate: _onDragUpdate,
-        onVerticalDragEnd: _onDragEnd,
-        child: ValueListenableBuilder<double>(
-          valueListenable: _dragOffset,
-          builder: (context, offset, child) =>
-              Transform.translate(offset: Offset(0, offset), child: child),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TakiSpacing.pageGutterImmersive,
+      body: _Backdrop(
+        child: GestureDetector(
+          onVerticalDragUpdate: _onDragUpdate,
+          onVerticalDragEnd: _onDragEnd,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _dragOffset,
+            builder: (context, offset, child) =>
+                Transform.translate(offset: Offset(0, offset), child: child),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TakiSpacing.pageGutterImmersive,
+                ),
+                child: song == null
+                    ? const SizedBox.expand()
+                    : LayoutBuilder(
+                        builder: (context, constraints) =>
+                            constraints.maxWidth > constraints.maxHeight
+                            ? _LandscapeLayout(
+                                song: song,
+                                onClose: _close,
+                                onOpenQueue: widget.onOpenQueue,
+                              )
+                            : _PortraitLayout(
+                                song: song,
+                                onClose: _close,
+                                onOpenQueue: widget.onOpenQueue,
+                                constraints: constraints,
+                              ),
+                      ),
               ),
-              child: song == null
-                  ? const SizedBox.expand()
-                  : LayoutBuilder(
-                      builder: (context, constraints) =>
-                          constraints.maxWidth > constraints.maxHeight
-                          ? _LandscapeLayout(
-                              song: song,
-                              onClose: _close,
-                              onOpenQueue: widget.onOpenQueue,
-                            )
-                          : _PortraitLayout(
-                              song: song,
-                              onClose: _close,
-                              onOpenQueue: widget.onOpenQueue,
-                              constraints: constraints,
-                            ),
-                    ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The dominant color of the cover being shown, fed by [_Artwork] and read by
+/// [_Backdrop]. It lives here because both ends belong to this screen.
+final nowPlayingTintProvider = StateProvider.autoDispose<Color?>((ref) => null);
+
+/// A soft gradient of the cover's dominant color behind the whole screen, so
+/// each song gets its own atmosphere. Without a cover (or a usable color) the
+/// screen keeps the plain background.
+class _Backdrop extends ConsumerWidget {
+  const _Backdrop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tint = ref.watch(nowPlayingTintProvider);
+
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(
+        end: tint == null ? TakiColors.background : backdropTint(tint),
+      ),
+      duration: const Duration(milliseconds: 500),
+      builder: (context, color, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [color ?? TakiColors.background, TakiColors.background],
+            stops: const [0, 0.75],
+          ),
+        ),
+        child: child,
+      ),
+      child: child,
     );
   }
 }
@@ -153,7 +198,7 @@ class _PortraitLayout extends StatelessWidget {
       const SizedBox(height: TakiSpacing.xl),
       const _Controls(),
       const SizedBox(height: TakiSpacing.xl),
-      _BottomActions(onOpenQueue: onOpenQueue),
+      _BottomActions(song: song, onOpenQueue: onOpenQueue),
       // Secundaria: no ocupa nada si no hay atribución.
       AttributionSection(song: song),
       const SizedBox(height: TakiSpacing.lg),
@@ -241,7 +286,7 @@ class _LandscapeLayout extends StatelessWidget {
                         const _SeekBar(),
                         const _Controls(),
                         const SizedBox(height: TakiSpacing.sm),
-                        _BottomActions(onOpenQueue: onOpenQueue),
+                        _BottomActions(song: song, onOpenQueue: onOpenQueue),
                         AttributionSection(song: song),
                       ],
                     );
@@ -264,14 +309,19 @@ class _LandscapeLayout extends StatelessWidget {
   }
 }
 
-/// Fila inferior de accesos. Por ahora solo "Cola" (§11: botón secundario).
-class _BottomActions extends StatelessWidget {
-  const _BottomActions({required this.onOpenQueue});
+/// Fila inferior de accesos: «Cola» con texto y, al lado, letra, temporizador
+/// y ecualizador como botones de icono. Una sola fila, para no quitarle altura
+/// a la carátula.
+class _BottomActions extends ConsumerWidget {
+  const _BottomActions({required this.song, required this.onOpenQueue});
 
+  final Song song;
   final VoidCallback onOpenQueue;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final badge = sleepTimerBadge(ref.watch(sleepTimerProvider));
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -284,6 +334,31 @@ class _BottomActions extends StatelessWidget {
             semanticLabel: 'Abrir la cola',
             onPressed: onOpenQueue,
           ),
+        ),
+        const SizedBox(width: TakiSpacing.sm),
+        TakiIconButton(
+          icon: Icons.lyrics_outlined,
+          semanticLabel: 'Ver la letra',
+          variant: TakiIconButtonVariant.tonal,
+          onPressed: () => showLyricsSheet(context, song),
+        ),
+        const SizedBox(width: TakiSpacing.xs),
+        TakiIconButton(
+          icon: Icons.bedtime_outlined,
+          selectedIcon: Icons.bedtime_rounded,
+          selected: badge != null,
+          semanticLabel: badge == null
+              ? 'Temporizador de sueño'
+              : 'Temporizador de sueño, activo: $badge',
+          variant: TakiIconButtonVariant.tonal,
+          onPressed: () => showSleepTimerSheet(context),
+        ),
+        const SizedBox(width: TakiSpacing.xs),
+        TakiIconButton(
+          icon: Icons.equalizer_rounded,
+          semanticLabel: 'Abrir el ecualizador',
+          variant: TakiIconButtonVariant.tonal,
+          onPressed: () => showEqualizerSheet(context),
         ),
       ],
     );
@@ -360,22 +435,27 @@ class _TopBar extends ConsumerWidget {
 }
 
 /// Carátula grande (§11): `TakiArtwork` hero. La imagen la resuelve
-/// [AlbumArtworkBuilder] (caché de carátulas → `ResizeImage(MemoryImage)`).
-class _Artwork extends StatelessWidget {
+/// [AlbumArtworkBuilder] (caché de carátulas → `ResizeImage(MemoryImage)`) y de
+/// esa misma imagen sale el color del fondo: no se pide nada más.
+class _Artwork extends ConsumerWidget {
   const _Artwork({required this.artwork, required this.size});
 
   final ArtworkReference artwork;
   final double size;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Tamaño entero: evita pedir la carátula de nuevo por fracciones de píxel;
     // el mismo lado se pide y se dibuja.
     final side = math.max(0.0, size.floorToDouble());
     return AlbumArtworkBuilder.reference(
       reference: artwork,
       size: side,
-      builder: (_, image) => TakiArtwork(size: side, hero: true, image: image),
+      builder: (_, image) => ArtworkTint(
+        image: image,
+        onTint: (tint) => ref.read(nowPlayingTintProvider.notifier).state = tint,
+        builder: (_, _) => TakiArtwork(size: side, hero: true, image: image),
+      ),
     );
   }
 }

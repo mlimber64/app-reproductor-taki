@@ -16,6 +16,7 @@ import '../../../../core/widgets/taki_error_state.dart';
 import '../../../../core/widgets/taki_song_tile.dart';
 import '../../../player/presentation/providers/player_providers.dart';
 import '../providers/songs_notifier.dart';
+import '../widgets/recently_played_section.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key, required this.onSongActions});
@@ -139,6 +140,14 @@ class _SongList extends ConsumerWidget {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
+        SliverToBoxAdapter(
+          child: RecentlyPlayedSection(
+            currentIdentity: currentIdentity,
+            isPlaying: isPlaying,
+            onPlayAt: (list, index) => _play(ref, list, index),
+            onActions: (song) => onSongActions(context, ref, song),
+          ),
+        ),
         SliverToBoxAdapter(child: _LibraryHeader(library: library)),
         // Alto medido con una fila real: crece con el tamaño de texto
         // (TakiSongTile, §8) y la lista sigue siendo perezosa.

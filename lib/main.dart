@@ -12,8 +12,11 @@ import 'core/catalog/catalog_sources_providers.dart';
 import 'core/database/taki_database.dart';
 import 'core/database/taki_database_provider.dart';
 import 'core/lookup/attribution_lookup_providers.dart';
+import 'core/lyrics/lyrics_providers.dart';
 import 'features/library/infrastructure/media_store_artwork_repository.dart';
+import 'features/lyrics/infrastructure/lrclib_lyrics_source.dart';
 import 'features/player/infrastructure/player_bootstrap.dart';
+import 'features/player/presentation/providers/equalizer_providers.dart';
 import 'features/player/presentation/providers/player_providers.dart';
 import 'features/settings/infrastructure/font_licenses.dart';
 
@@ -46,6 +49,7 @@ Future<void> main() async {
         artworkRepositoryProvider.overrideWithValue(artwork),
         jamendoServicesProvider.overrideWithValue(jamendo),
         audiusServicesProvider.overrideWithValue(audius),
+        lyricsSourceProvider.overrideWithValue(LrclibLyricsSource(http)),
         artworkResolverProvider
             .overrideWithValue(buildArtworkResolver(jamendo, audius: audius)),
         remoteArtworkLoaderProvider.overrideWithValue(remoteArtworkLoader),
@@ -56,6 +60,7 @@ Future<void> main() async {
         songLookupOverride(),
         audioPlayerPortProvider.overrideWithValue(playback.player),
         audioHandlerProvider.overrideWithValue(playback.handler),
+        equalizerPortProvider.overrideWithValue(playback.equalizer),
         if (database != null)
           takiDatabaseProvider.overrideWith((ref) => database),
       ],

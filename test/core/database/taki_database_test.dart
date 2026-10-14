@@ -46,6 +46,15 @@ const _v2PlaylistSongsIndex =
     'CREATE INDEX idx_playlist_songs_position '
     'ON playlist_songs (playlist_id, position)';
 
+/// Tables of the current schema: the identity ones plus history and preferences.
+const _v4Tables = {
+  'favorites',
+  'playlists',
+  'playlist_songs',
+  'play_history',
+  'preferences',
+};
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -147,9 +156,9 @@ void main() {
       );
       addTearDown(db.close);
 
-      expect(await db.getVersion(), 3);
+      expect(await db.getVersion(), 4);
       expect(await tables(db),
-          {'favorites', 'playlists', 'playlist_songs'});
+          _v4Tables);
       expect(await columns(db, 'favorites'), [
         'source',
         'external_id',
@@ -202,7 +211,7 @@ void main() {
       final db = await migrate();
       addTearDown(db.close);
 
-      expect(await db.getVersion(), 3);
+      expect(await db.getVersion(), 4);
       expect(await db.query('favorites'), isEmpty);
       expect(await db.query('playlists'), isEmpty);
       expect(await db.query('playlist_songs'), isEmpty);
@@ -453,9 +462,9 @@ void main() {
       final second = await migrate();
       addTearDown(second.close);
 
-      expect(await second.getVersion(), 3);
+      expect(await second.getVersion(), 4);
       expect(await second.query('favorites'), snapshot);
-      expect(await tables(second), {'favorites', 'playlists', 'playlist_songs'});
+      expect(await tables(second), _v4Tables);
     });
   });
 
@@ -469,12 +478,12 @@ void main() {
       final db = await migrate();
       addTearDown(db.close);
 
-      expect(await db.getVersion(), 3);
+      expect(await db.getVersion(), 4);
       final favorites = await db.query('favorites');
       expect(favorites.single['source'], 'local');
       expect(favorites.single['external_id'], '42');
       expect(favorites.single['title'], 'Favorita');
-      expect(await tables(db), {'favorites', 'playlists', 'playlist_songs'});
+      expect(await tables(db), _v4Tables);
       expect(await columns(db, 'playlist_songs'), contains('external_id'));
       expect(await columns(db, 'playlist_songs'), isNot(contains('song_id')));
 
@@ -536,7 +545,7 @@ void main() {
 
       final db = await migrate();
       addTearDown(db.close);
-      expect(await db.getVersion(), 3);
+      expect(await db.getVersion(), 4);
       expect((await db.query('favorites')).single['external_id'], '42');
     });
   });

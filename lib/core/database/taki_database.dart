@@ -11,13 +11,18 @@ import 'package:sqflite/sqflite.dart';
 ///   entero. Es la persistencia de `MusicIdentity`; el id externo es un texto
 ///   opaco que no se normaliza ni se convierte a número. Los datos de v1/v2 se
 ///   migran como `source = 'local'`, `external_id = <id anterior en decimal>`.
+/// - v4: `play_history` (una fila por canción con su última reproducción y su
+///   recuento) y `preferences` (clave/valor de texto para ajustes de la app).
+///   Solo añade tablas: no toca los datos anteriores.
 abstract final class TakiDatabase {
   static const String fileName = 'taki.db';
-  static const int version = 3;
+  static const int version = 4;
 
   static const String favoritesTable = 'favorites';
   static const String playlistsTable = 'playlists';
   static const String playlistSongsTable = 'playlist_songs';
+  static const String playHistoryTable = 'play_history';
+  static const String preferencesTable = 'preferences';
 
   /// Fuente con la que la migración v2 → v3 etiqueta los ids enteros
   /// existentes. **Congelada**: una migración debe escribir siempre el mismo
@@ -63,6 +68,7 @@ abstract final class TakiDatabase {
     await _createPlaylists(db);
     await _createPlaylistSongs(db, playlistSongsTable);
     await _createPlaylistSongsIndex(db);
+    await _createV4(db);
   }
 
   /// sqflite ejecuta la actualización dentro de una transacción: si algo lanza,
@@ -76,6 +82,31 @@ abstract final class TakiDatabase {
     // v2 → v3 reconstruye las tablas con copia verificada.
     if (oldVersion < 2) await _createPlaylistsV2(db);
     if (oldVersion < 3) await _migrateToIdentity(db);
+    if (oldVersion < 4) await _createV4(db);
+  }
+
+  /// Historial de reproducción y preferencias. La identidad (`source` +
+  /// `external_id`) es la clave: reproducir otra vez la misma canción actualiza
+  /// su fila en lugar de añadir otra.
+  static Future<void> _createV4(Database db) async {
+    await db.execute('''
+      CREATE TABLE $playHistoryTable (
+        source TEXT NOT NULL CHECK (length(trim(source)) > 0),
+        external_id TEXT NOT NULL CHECK (length(trim(external_id)) > 0),
+        last_played_at INTEGER NOT NULL,
+        play_count INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (source, external_id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_play_history_last ON $playHistoryTable (last_played_at)',
+    );
+    await db.execute('''
+      CREATE TABLE $preferencesTable (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      )
+    ''');
   }
 
   // ---------------------------------------------------------------------------
