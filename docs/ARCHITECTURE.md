@@ -304,6 +304,32 @@ TakiArtwork             solo presentación
   registrada (**provisional**; no hay selector, mezcla ni ranking).
 - `SearchPage` no conoce proveedores: el menú ⋯ de cada fila es el
   `showSongActions` inyectado por el router.
+- **Descubrimiento (`core`):** `CatalogBrowse.section(CatalogSection, {limit})` →
+  `CatalogSearchPage`; es un puerto aparte porque una fuente puede ser buscable y
+  no tener «populares». `CatalogSection` es un valor neutral (`popularThisWeek`,
+  `popularThisMonth`, `newReleases` y `genre(tag)`); una fuente que no sabe
+  responder una sección devuelve una página vacía, no un fallo.
+  `CatalogSourceRegistration` lleva un `browse` opcional y
+  `CatalogSources.browseIn(source)` devuelve `null` si la fuente no se puede
+  explorar. `GetFeaturedSongs` (caso de uso) pide una sección, deduplica y traduce
+  los fallos a `CatalogSearchFailure`.
+- **Carruseles:** antes de buscar (`SearchIdle`, o escribiendo sin resultados
+  previos), `FeaturedView` muestra una lista vertical de carruseles horizontales
+  de `TakiSongCard`, uno por `FeaturedSection` (`defaultFeaturedSections`:
+  populares de la semana, del mes, novedades y los géneros rock, electrónica,
+  pop, hip hop, jazz y chill). Cada carrusel carga **por separado y de forma
+  perezosa** (`featuredSectionSongsProvider`, una familia por `CatalogSection`,
+  en caché durante la sesión): uno que falla muestra su propio mensaje con
+  «Reintentar» sin afectar a los demás, y uno que llega vacío no se pinta.
+  Tocar una card reproduce **la lista de ese carrusel** desde esa canción;
+  mantener pulsado abre el menú de acciones; arrastrar hacia abajo refresca todo.
+  Si el primer carrusel llega vacío, o no hay fuente explorable, la pantalla
+  conserva su vista inactiva de siempre. El estado de reproducción se inyecta
+  desde `search_page.dart` (la única excepción entre features sigue siendo ese
+  import).
+- **Teclado:** al entrar en Buscar el campo **no** pide el foco, para que el
+  teclado no tape los carruseles; se abre cuando el usuario toca el campo. Al
+  salir de la pestaña el foco se suelta, y al volver no se vuelve a pedir.
 
 ## Atribución
 
@@ -360,6 +386,11 @@ Toda la lógica específica vive ahí; `core` no la conoce.
 - **API:** `HttpJamendoApi` (`Uri.https('api.jamendo.com', …)`), 10 s, 4 MB,
   reintenta hasta 3 veces una respuesta vacía; `tracksByIds` en lotes de 50.
   Reutiliza el `ArtworkHttpClient` existente como transporte GET.
+- **Descubrimiento:** `JamendoCatalogBrowse` implementa `CatalogBrowse` con
+  `JamendoApi.listTracks(order, tag)`: `popularity_week`, `popularity_month`,
+  `releasedate_desc` y, para un género, `popularity_week` con `tags=<género>`.
+  Pasa por el mismo reintento de respuestas vacías y por la caché de URLs de
+  audio.
 - **Parser:** decodifica entidades HTML de título/artista/álbum (no de URLs ni ids).
 - **Reproducción remota:** `JamendoPlaybackResolver` devuelve `RemoteUriResource`
   con la URL de audio; `JamendoAudioCache` (solo memoria, TTL 10 min, 500) evita

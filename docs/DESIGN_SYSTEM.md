@@ -1054,6 +1054,7 @@ pantallas ya están migradas.
 | `TakiIconButton` | `icon`, `semanticLabel` (obligatorio, también tooltip), `onPressed` (`null` = deshabilitado), `variant` (`standard`, `subtle`, `tonal`, `inverse`), `iconSize` (`TakiIconSize`), `selected` + `selectedIcon` (toggle), `tooltip` |
 | `TakiButton` | `label`, `onPressed`, `variant` (`primary`, `secondary`, `tertiary`, `destructive`, `destructiveTertiary`), `icon`, `loading`, `semanticLabel` |
 | `TakiSectionHeader` | `title`, `variant` (`group`, `section`), `subtitle` (solo sección), `action` (`TakiSectionHeaderAction.text` o `.icon`), `isFirst` |
+| `TakiSongCard` | `song`, `artworkSize` (lado de la carátula = ancho de la card), `artwork`, `playback` (`TakiNowPlaying`), `onTap`, `onLongPress`. Carátula cuadrada con título (1 línea) y artista (1 línea) debajo; la que suena lleva el indicador sobre la carátula y el título en `primary`. Un solo nodo semántico `título, artista[, reproduciendo|en pausa]`. `textBlockHeight(context)` da el alto del texto con la escala actual para reservar el alto de cada carrusel. En los carruseles de Buscar mide 148 px de carátula, con 12 de separación, para que asome la siguiente |
 | `TakiSettingsTile` | `icon`, `title`, `subtitle`, `trailing`, `onTap` (`null` = informativa, no se anuncia como botón), `destructive` (título en `error`). Alto mínimo 64, anillo de foco interior, un solo nodo semántico `título, subtítulo` |
 
 **API de los componentes musicales (Fase 1.4B).** Solo presentación: reciben
