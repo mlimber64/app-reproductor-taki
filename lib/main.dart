@@ -14,9 +14,11 @@ import 'core/lookup/attribution_lookup_providers.dart';
 import 'features/library/infrastructure/media_store_artwork_repository.dart';
 import 'features/player/infrastructure/player_bootstrap.dart';
 import 'features/player/presentation/providers/player_providers.dart';
+import 'features/settings/infrastructure/font_licenses.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicenses();
 
   // Carátulas de MediaStore: las usan la UI y la notificación del reproductor.
   final artwork = MediaStoreArtworkRepository();

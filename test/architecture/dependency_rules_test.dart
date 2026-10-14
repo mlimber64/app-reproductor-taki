@@ -191,6 +191,9 @@ const Set<String> _allowedCrossFeature = {
   // Buscar reproduce el resultado tocado y marca la canción que suena.
   'features/search/presentation/pages/search_page.dart -> '
       'features/player/presentation/providers/player_providers.dart',
+  // Ajustes muestra el estado de la biblioteca y la vuelve a escanear.
+  'features/settings/presentation/pages/settings_page.dart -> '
+      'features/library/presentation/providers/songs_notifier.dart',
   // El detalle de playlist reproduce, mezcla y marca la canción que suena.
   'features/playlists/presentation/pages/playlist_detail_page.dart -> '
       'features/player/presentation/providers/player_providers.dart',
