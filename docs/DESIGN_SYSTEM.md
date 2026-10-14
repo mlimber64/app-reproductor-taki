@@ -1054,6 +1054,7 @@ pantallas ya están migradas.
 | `TakiIconButton` | `icon`, `semanticLabel` (obligatorio, también tooltip), `onPressed` (`null` = deshabilitado), `variant` (`standard`, `subtle`, `tonal`, `inverse`), `iconSize` (`TakiIconSize`), `selected` + `selectedIcon` (toggle), `tooltip` |
 | `TakiButton` | `label`, `onPressed`, `variant` (`primary`, `secondary`, `tertiary`, `destructive`, `destructiveTertiary`), `icon`, `loading`, `semanticLabel` |
 | `TakiSectionHeader` | `title`, `variant` (`group`, `section`), `subtitle` (solo sección), `action` (`TakiSectionHeaderAction.text` o `.icon`), `isFirst` |
+| `TakiSettingsTile` | `icon`, `title`, `subtitle`, `trailing`, `onTap` (`null` = informativa, no se anuncia como botón), `destructive` (título en `error`). Alto mínimo 64, anillo de foco interior, un solo nodo semántico `título, subtítulo` |
 
 **API de los componentes musicales (Fase 1.4B).** Solo presentación: reciben
 datos (`Song` de `core/domain` o valores simples) y callbacks; ninguno importa

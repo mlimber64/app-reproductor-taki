@@ -15,7 +15,8 @@ Redmi Note 14 Pro+ 5G (Android 16, HyperOS 3.0). Que exista esa APK **no** signi
 que esté lista para distribución comercial: las pistas de Jamendo suelen tener
 licencias Creative Commons de uso no comercial.
 
-- **Ajustes** es una pantalla provisional.
+- **Ajustes** reúne acciones de biblioteca, almacenamiento, catálogos en línea,
+  privacidad y datos de la app. No guarda preferencias.
 - Hay limitaciones y verificaciones pendientes: ver [Limitaciones](#limitaciones).
 - Solo se ha preparado y validado para **Android**.
 
@@ -92,7 +93,7 @@ lib/
 ```
 
 Dirección de dependencias: `app → features → core`. Las features no dependen de
-`app` ni (salvo 7 excepciones documentadas) de otras features; `core` no depende de
+`app` ni (salvo 8 excepciones documentadas) de otras features; `core` no depende de
 nadie; ni `core` ni las features genéricas (`search`, `player`, `playlists`) conocen a
 Jamendo. `test/architecture/dependency_rules_test.dart` (13 pruebas) lo comprueba.
 
@@ -152,7 +153,8 @@ versione ni los comparta. Verificación recomendada de un APK:
 
 Lo que **no** existe o **no** se ha verificado (no son necesariamente bugs):
 
-- No hay segundo proveedor, modo offline ni descargas; Ajustes es provisional.
+- No hay segundo proveedor, modo offline ni descargas; Ajustes no guarda
+  preferencias.
 - No verificado en dispositivo: la UI del lockscreen (el teléfono de prueba no tiene
   bloqueo seguro), auriculares físicos, seek en pistas remotas y la muerte del
   proceso por el sistema.
@@ -184,7 +186,7 @@ Cada fase tiene su informe en `docs/PHASE_*`. Estado actual:
 
 Todo lo de esta sección es **FUTURO**: nada de esto está implementado.
 
-- **FUTURO:** pantalla de Ajustes real.
+- **FUTURO:** preferencias persistidas en Ajustes.
 - **FUTURO:** segundo proveedor de catálogo y política multi-fuente (selector,
   mezcla, ranking).
 - **FUTURO:** modo offline / descargas.

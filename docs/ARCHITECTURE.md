@@ -66,7 +66,9 @@ lib/
     ├── search/                   Búsqueda de catálogo (neutral al proveedor)
     ├── jamendo/                  Proveedor remoto actual (domain + infrastructure,
     │                             sin presentation)
-    └── settings/                 Solo SettingsPage (provisional)
+    └── settings/                 Ajustes: biblioteca, almacenamiento, catálogos,
+                                  privacidad y Acerca de (domain, infrastructure,
+                                  presentation)
 ```
 
 Pestañas: **Biblioteca**, **Buscar** (solo si hay algún catálogo disponible,
@@ -141,9 +143,9 @@ Prohibido: `features → app`, `core → features`, `core → app` y
 - `core` no importa Jamendo (`jamendo_security_test`).
 - Jamendo depende solo de `core`; lo conecta `app/`.
 
-### Excepciones feature → feature (7)
+### Excepciones feature → feature (8)
 
-Son 7 imports `presentation → presentation/providers` de otra feature. Ninguna
+Son 8 imports `presentation → presentation/providers` de otra feature. Ninguna
 feature importa el `domain`, la `infrastructure`, las páginas ni los widgets de
 otra. `test/architecture/dependency_rules_test.dart` las enumera.
 
@@ -156,6 +158,7 @@ otra. `test/architecture/dependency_rules_test.dart` las enumera.
 | 5 | `playlists/…/playlist_detail_page.dart` | `library/…/songs_notifier.dart` | Estado de permiso local y rescan |
 | 6 | `playlists/…/playlist_detail_page.dart` | `player/…/player_providers.dart` | Reproducir, mezclar, resaltar |
 | 7 | `search/…/search_page.dart` | `player/…/player_providers.dart` | Tocar un resultado lo reproduce (única dependencia de `search` hacia otra feature) |
+| 8 | `settings/…/settings_page.dart` | `library/…/songs_notifier.dart` | Estado de la biblioteca (permiso, recuento) y volver a escanear |
 
 Son dependencias de composición entre providers, no de modelo ni de UI. Las
 número 4 y 5 son **provisionales**: dependen de la biblioteca local escaneada.
@@ -317,6 +320,34 @@ TakiArtwork             solo presentación
 - `ExternalLinkOpener` (puerto) / `UrlLauncherLinkOpener` abre el navegador del
   sistema; `openableUrl` solo admite `http(s)` con host.
 
+## Ajustes
+
+`features/settings` sigue la misma estructura hexagonal que el resto. **No hay
+preferencias persistidas**: cada fila es una acción o información de solo
+lectura.
+
+- **Dominio** (`domain/`): `AppInfo` (versión, build, plataforma),
+  `StorageUsage` (bytes y archivos), los puertos `AppInfoPort` y
+  `ArtworkCacheStoragePort` y los casos de uso `GetArtworkCacheUsage` y
+  `ClearArtworkCache`. `buildDiagnosticsReport` arma el texto de diagnóstico:
+  solo versión, sistema y contadores; nunca títulos, rutas, favoritos,
+  nombres de playlist ni credenciales.
+- **Infraestructura**: `PackageInfoAppInfo` (`package_info_plus` +
+  `device_info_plus`), `FileArtworkCacheStorage` (la carpeta `artwork` del
+  directorio temporal, la misma que escribe `ArtworkFileCache`) y
+  `registerFontLicenses` (añade las licencias OFL de Sora y DM Sans a la
+  pantalla de licencias; se llama en `main`).
+- **Presentación**: `SettingsPage` compone cinco secciones con
+  `TakiSectionHeader` (grupo) y `TakiSettingsTile` (`core/widgets`): Biblioteca
+  (resumen y volver a escanear), Almacenamiento (tamaño y vaciar la caché de
+  carátulas, con confirmación), Catálogo en línea (las fuentes de
+  `CatalogSources.available` por su etiqueta, sin nombrar a ningún proveedor),
+  Privacidad y Acerca de (versión, licencias de código abierto y copiar
+  diagnóstico).
+
+Vaciar la caché de carátulas solo borra archivos regenerables: no toca
+canciones, favoritos ni playlists.
+
 ## Jamendo (proveedor actual)
 
 `features/jamendo` (domain + infrastructure) es el **único** proveedor remoto.
@@ -424,7 +455,7 @@ la 3.9).
 `test/architecture/dependency_rules_test.dart` (**13 pruebas**) lee los
 `import`/`export` de `lib/` y comprueba: (1) que encuentra imports; (2) `core` no
 depende de `app` ni de features; (3) las features no dependen de `app`; (4) sin
-imports entre features salvo las **7** excepciones; (5) las excepciones siguen
+imports entre features salvo las **8** excepciones; (5) las excepciones siguen
 existiendo; (6) `core/domain` solo importa `equatable`; (7–10) `features/search`:
 solo importa de otra feature el provider del Player, no importa Jamendo, no depende
 de `app` y no menciona a ningún proveedor; (11) `features/player` no importa ni
@@ -459,7 +490,8 @@ Hechos, no promesas (detalle en `PHASE_3_8_GLOBAL_POST_3_7B_AUDIT.md` y
 `PHASE_3_9_ANDROID_VALIDATION_RELEASE.md`):
 
 - **No implementado:** segunda fuente / selector / mezcla (D6), modo offline, descarga
-  de pistas, localización, Ajustes reales, AAB / Play App Signing (no evaluado).
+  de pistas, localización, preferencias persistidas en Ajustes, AAB / Play App
+  Signing (no evaluado).
 - **No verificado en dispositivo:** UI del lockscreen (el teléfono de prueba no tiene
   bloqueo seguro), auriculares físicos, seek en pistas remotas, muerte del proceso por
   el sistema, persistencia de `remote_*.img` entre reinicios en el release.
