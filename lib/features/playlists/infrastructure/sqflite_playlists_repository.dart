@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import '../../../core/domain/entities/local_song.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/taki_database.dart';
+import '../../../core/domain/entities/music_identity.dart';
 import '../../../core/domain/entities/song.dart';
 import '../domain/entities/playlist.dart';
 import '../domain/entities/playlist_entry.dart';
@@ -112,7 +114,7 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
         batch.insert(_songs, {
           'playlist_id': playlistId,
           'position': position++,
-          'song_id': song.id,
+          ..._identity(song.musicIdentity),
           ..._backup(song),
         });
       }
@@ -173,7 +175,7 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
         if (idTaken.isEmpty) 'id': entry.id,
         'playlist_id': entry.playlistId,
         'position': position,
-        'song_id': entry.songId,
+        ..._identity(entry.musicIdentity),
         'title': entry.title,
         'artist': entry.artist,
         'album': entry.album,
@@ -230,7 +232,7 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
   Future<void> relink(int entryId, Song song) {
     return _write((txn) => txn.update(
           _songs,
-          {'song_id': song.id, ..._backup(song)},
+          {..._identity(song.musicIdentity), ..._backup(song)},
           where: 'id = ?',
           whereArgs: [entryId],
         ));
@@ -269,30 +271,43 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
 
   Future<List<Playlist>> _queryPlaylists() async {
     final db = await _database();
-    // Las posiciones son contiguas desde 0: "position < 4" son las primeras 4.
-    // group_concat no garantiza orden, por eso cada id lleva su posición.
     final rows = await db.rawQuery('''
       SELECT p.id, p.name, p.created_at, p.updated_at,
         COUNT(s.id) AS song_count,
-        COALESCE(SUM(s.duration_ms), 0) AS total_ms,
-        (SELECT group_concat(c.position || ':' || c.song_id)
-           FROM $_songs c
-           WHERE c.playlist_id = p.id AND c.position < $_coverSize) AS cover
+        COALESCE(SUM(s.duration_ms), 0) AS total_ms
       FROM $_playlists p
       LEFT JOIN $_songs s ON s.playlist_id = p.id
       GROUP BY p.id
       ORDER BY p.updated_at DESC, p.id DESC
     ''');
-    return [for (final row in rows) _toPlaylist(row)];
+
+    // Las posiciones son contiguas desde 0: "position < 4" son las primeras 4.
+    // Se piden aparte, una fila por entrada y ordenadas: los ids externos son
+    // texto opaco y no pueden concatenarse con separadores sin riesgo.
+    final coverRows = await db.query(
+      _songs,
+      columns: ['playlist_id', 'source', 'external_id'],
+      where: 'position < ?',
+      whereArgs: [_coverSize],
+      orderBy: 'playlist_id, position',
+    );
+    final covers = <int, List<MusicIdentity>>{};
+    for (final row in coverRows) {
+      covers
+          .putIfAbsent(row['playlist_id']! as int, () => [])
+          .add(_toIdentity(row));
+    }
+
+    return [
+      for (final row in rows)
+        _toPlaylist(row, covers[row['id']! as int] ?? const []),
+    ];
   }
 
-  static Playlist _toPlaylist(Map<String, Object?> row) {
-    final cover = <(int, int)>[
-      for (final pair in ((row['cover'] as String?) ?? '').split(','))
-        if (pair.contains(':'))
-          (int.parse(pair.split(':')[0]), int.parse(pair.split(':')[1])),
-    ]..sort((a, b) => a.$1.compareTo(b.$1));
-
+  static Playlist _toPlaylist(
+    Map<String, Object?> row,
+    List<MusicIdentity> cover,
+  ) {
     return Playlist(
       id: row['id']! as int,
       name: row['name']! as String,
@@ -300,16 +315,24 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
       totalDurationMs: row['total_ms']! as int,
       createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at']! as int),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at']! as int),
-      coverSongIds: [for (final (_, songId) in cover) songId],
+      coverIdentities: List.unmodifiable(cover),
     );
   }
+
+  static Map<String, Object?> _identity(MusicIdentity identity) => {
+        'source': identity.source,
+        'external_id': identity.externalId,
+      };
+
+  static MusicIdentity _toIdentity(Map<String, Object?> row) =>
+      MusicIdentity(row['source']! as String, row['external_id']! as String);
 
   static Map<String, Object?> _backup(Song song) => {
         'title': song.title,
         'artist': song.artist,
         'album': song.album,
         'duration_ms': song.durationMs,
-        'path': song.path,
+        'path': localPathOf(song),
       };
 
   static PlaylistEntry _toEntry(Map<String, Object?> row) {
@@ -317,7 +340,7 @@ class SqflitePlaylistsRepository implements PlaylistsRepository {
       id: row['id']! as int,
       playlistId: row['playlist_id']! as int,
       position: row['position']! as int,
-      songId: row['song_id']! as int,
+      musicIdentity: _toIdentity(row),
       title: row['title'] as String?,
       artist: row['artist'] as String?,
       album: row['album'] as String?,

@@ -6,7 +6,8 @@ import 'package:flutter/painting.dart';
 /// naranja ([primary]) es identidad y foco: acción principal, lo que suena, lo
 /// activo o seleccionado y el foco; no decora.
 ///
-/// Convive con `AppColors` hasta que la migración (§22) lo sustituya.
+/// Es la fuente vigente de los tokens de color del Design System; `AppTheme`
+/// los compone en el `ThemeData`.
 abstract final class TakiColors {
   // Superficies (§1.2). Cada nivel es ≈1.1:1 más claro que el anterior.
 

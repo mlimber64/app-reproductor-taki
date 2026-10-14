@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:taki/core/domain/entities/local_song.dart';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
+import '../../../helpers/artwork_reference_ext.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/core/domain/ports/artwork_repository.dart';
@@ -24,10 +28,13 @@ import 'package:taki/features/library/presentation/pages/favorites_page.dart';
 import 'package:taki/features/library/presentation/providers/favorites_providers.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
+
 
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
+import '../../../helpers/artwork_image.dart';
 
 void main() {
   late MockMediaPermission permission;
@@ -117,6 +124,33 @@ void main() {
       ..seed(favorites.entryFor(beta));
   }
 
+  testWidgets('la actual se identifica por identidad, no por Song.id',
+      (tester) async {
+    // Ambas tienen id 0: solo la identidad las distingue.
+    final uno = buildSong(id: 31, title: 'Foráneo 1');
+    final dos = buildSong(id: 32, title: 'Foráneo 2');
+    when(library.getSongs).thenAnswer((_) async => [uno, dos]);
+    favorites
+      ..seed(favorites.entryFor(uno))
+      ..seed(favorites.entryFor(dos));
+    await pumpFavorites(tester);
+
+    player.emitState(
+      PlaybackState(queue: [uno, dos], currentIndex: 1, isPlaying: true),
+    );
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    TakiNowPlaying stateOf(String title) => tester
+        .widget<TakiSongTile>(
+          find.ancestor(of: find.text(title), matching: find.byType(TakiSongTile)),
+        )
+        .playback;
+    expect(stateOf('Foráneo 2'), TakiNowPlaying.playing);
+    expect(stateOf('Foráneo 1'), TakiNowPlaying.none);
+  });
+
   testWidgets('lista los favoritos, más recientes primero', (tester) async {
     markAlfaThenBeta();
     await pumpFavorites(tester);
@@ -171,7 +205,7 @@ void main() {
     await tester.tap(find.text('Quitar de favoritos'));
     await tester.pumpAndSettle();
 
-    expect(favorites.entries.keys, [2]);
+    expect(favorites.entries.keys, [localMusicIdentity(2)]);
     expect(find.text('Quitada de favoritos'), findsOneWidget);
     expect(find.text('Alfa'), findsNothing);
   });
@@ -618,7 +652,7 @@ void main() {
 
       testWidgets('carga: spinner hasta tener datos', (tester) async {
         markAll();
-        final pending = Completer<List<Song>>();
+        final pending = Completer<List<LocalSong>>();
         when(library.getSongs).thenAnswer((_) => pending.future);
         await pumpFavorites(tester, settle: false);
 
@@ -636,7 +670,7 @@ void main() {
 
         final gate = favorites.gate = Completer<void>();
         // Cambian los ids favoritos: favoriteSongsProvider se recalcula.
-        await favorites.remove(uno.id);
+        await favorites.remove(uno.musicIdentity);
         await tester.pump();
         await tester.pump();
 
@@ -674,8 +708,8 @@ void main() {
             );
 
         expect(artOf('Uno').size, TakiSongTile.artworkSize);
-        expect((artOf('Uno').image! as MemoryImage).bytes.first, 11);
-        expect((artOf('Dos').image! as MemoryImage).bytes.first, 22);
+        expect(memoryImageOf(artOf('Uno').image!).bytes.first, 11);
+        expect(memoryImageOf(artOf('Dos').image!).bytes.first, 22);
         // Sin álbum: placeholder y ninguna petición.
         expect(artOf('Tres').image, isNull);
         expect(artwork.requests.map((r) => r.$1).toSet(), {11, 22});
@@ -701,7 +735,7 @@ void main() {
         player.emitPosition(const Duration(seconds: 30));
         await tester.pumpAndSettle();
         // Recalcular: se quita una favorita y la lista se reconstruye.
-        await favorites.remove(tres.id);
+        await favorites.remove(tres.musicIdentity);
         await tester.pumpAndSettle();
         expect(find.text('Tres'), findsNothing);
 
@@ -803,6 +837,135 @@ void main() {
       }
     });
   });
+
+  // La resolución de carátulas la hace AlbumArtworkBuilder (core/artwork); la
+  // imagen mostrada (MemoryImage a 48) y "sin peticiones al cambiar de
+  // canción, posición ni al recalcular" ya los cubre el grupo anterior.
+  group('Artwork compartido (Fase 1.8C)', () {
+    // Marcadas en este orden, se ven al revés: Ed, Ec, Eb, Ea.
+    final ea = buildSong(id: 21, title: 'Ea', albumId: 11);
+    final eb = buildSong(id: 22, title: 'Eb', albumId: 22);
+    final ec = buildSong(id: 23, title: 'Ec', albumId: 11);
+    final ed = buildSong(id: 24, title: 'Ed', albumId: null);
+
+    AlbumArtworkBuilder builderOf(WidgetTester tester, String title) =>
+        tester.widget<AlbumArtworkBuilder>(
+          find.ancestor(
+            of: find.text(title),
+            matching: find.byType(AlbumArtworkBuilder),
+          ),
+        );
+
+    TakiArtwork artOf(WidgetTester tester, String title) =>
+        tester.widget<TakiArtwork>(
+          find.descendant(
+            of: find.ancestor(
+              of: find.text(title),
+              matching: find.byType(TakiSongTile),
+            ),
+            matching: find.byType(TakiArtwork),
+          ),
+        );
+
+    Future<_BytesArtworkRepository> pumpWith(
+      WidgetTester tester, {
+      void Function(_BytesArtworkRepository)? configure,
+    }) async {
+      final artwork = _BytesArtworkRepository();
+      configure?.call(artwork);
+      when(library.getSongs).thenAnswer((_) async => [ea, eb, ec, ed]);
+      favorites
+        ..seed(favorites.entryFor(ea))
+        ..seed(favorites.entryFor(eb))
+        ..seed(favorites.entryFor(ec))
+        ..seed(favorites.entryFor(ed));
+      await pumpFavorites(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      return artwork;
+    }
+
+    testWidgets('la fila usa song.artwork, no albumId', (tester) async {
+      final remote = remoteArtworkSong(title: 'Remota');
+      final none = buildSong(
+        id: 71,
+        title: 'Sin carátula',
+        albumId: 88,
+        artwork: const UnavailableArtworkReference(),
+      );
+      when(library.getSongs).thenAnswer((_) async => [remote, none]);
+      favorites
+        ..seed(favorites.entryFor(remote))
+        ..seed(favorites.entryFor(none));
+      final artwork = _BytesArtworkRepository();
+      await pumpFavorites(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      expect(builderOf(tester, 'Remota').reference, remoteTestArtwork);
+      expect(
+        builderOf(tester, 'Sin carátula').reference,
+        const UnavailableArtworkReference(),
+      );
+      expect(artwork.requests, isEmpty);
+    });
+
+    testWidgets('cada fila usa AlbumArtworkBuilder con su albumId y el '
+        'tamaño de TakiSongTile (48, el que usaba Favoritos)', (tester) async {
+      final artwork = await pumpWith(tester);
+
+      expect(find.byType(AlbumArtworkBuilder), findsNWidgets(4));
+      expect(
+        [
+          for (final title in ['Ed', 'Ec', 'Eb', 'Ea'])
+            builderOf(tester, title).albumId,
+        ],
+        [null, 11, 22, 11],
+      );
+      for (final title in ['Ed', 'Ec', 'Eb', 'Ea']) {
+        expect(builderOf(tester, title).size, 48, reason: title);
+        expect(builderOf(tester, title).size, TakiSongTile.artworkSize);
+      }
+      final physical = (48 * tester.view.devicePixelRatio).round();
+      expect(artwork.requests.map((r) => r.$2).toSet(), {physical});
+    });
+
+    testWidgets('un álbum compartido por varias canciones se pide una sola '
+        'vez', (tester) async {
+      final artwork = await pumpWith(tester);
+
+      expect(artwork.requests.where((r) => r.$1 == 11), hasLength(1));
+      expect(artwork.requests.where((r) => r.$1 == 22), hasLength(1));
+      expect(artOf(tester, 'Ea').image, isNotNull);
+      expect(artOf(tester, 'Ec').image, isNotNull);
+    });
+
+    testWidgets('álbum sin carátula: placeholder, sin romper la lista',
+        (tester) async {
+      await pumpWith(tester, configure: (r) => r.missing.add(22));
+
+      expect(artOf(tester, 'Eb').image, isNull);
+      expect(artOf(tester, 'Ea').image, isNotNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('error de lectura de una carátula: la fila y la lista '
+        'siguen funcionando', (tester) async {
+      await pumpWith(tester, configure: (r) => r.failing.add(11));
+
+      expect(artOf(tester, 'Ea').image, isNull);
+      expect(artOf(tester, 'Ec').image, isNull);
+      expect(artOf(tester, 'Eb').image, isNotNull);
+      expect(tester.takeException(), isNull);
+
+      // Reproducir sigue funcionando desde una fila sin carátula.
+      await tester.tap(find.text('Ea'));
+      await tester.pumpAndSettle();
+      verify(() => playSongs([ed, ec, eb, ea], 3)).called(1);
+    });
+  });
 }
 
 /// [FakeFavoritesRepository] cuya lectura puede quedar retenida con [gate],
@@ -818,13 +981,18 @@ class _GatedFavoritesRepository extends FakeFavoritesRepository {
   }
 }
 
-/// Carátulas de prueba: bytes con el álbum pedido; cuenta las peticiones.
+/// Carátulas de prueba: bytes con el álbum pedido; cuenta las peticiones. Con
+/// [missing] el álbum no tiene carátula; con [failing] la lectura falla.
 class _BytesArtworkRepository implements ArtworkRepository {
   final requests = <(int, int)>[];
+  final missing = <int>{};
+  final failing = <int>{};
 
   @override
   Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
     requests.add((albumId, size));
+    if (failing.contains(albumId)) throw StateError('lectura fallida');
+    if (missing.contains(albumId)) return null;
     return Uint8List.fromList([albumId, size]);
   }
 }

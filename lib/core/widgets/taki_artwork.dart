@@ -21,7 +21,8 @@ enum TakiArtworkKind {
 /// Carátula cuadrada de Taki (docs/DESIGN_SYSTEM.md §7). Solo presentación.
 ///
 /// Recibe la imagen como [ImageProvider] y no sabe de dónde sale: una carátula
-/// local (`AlbumArtworkImage`) o, en el futuro, una remota se ven igual.
+/// local (la que resuelve `AlbumArtworkBuilder`) o, en el futuro, una remota se
+/// ven igual.
 ///
 /// - Sin [image], mientras carga y si falla: placeholder (fondo `surface` e
 ///   icono del [kind] al 45 % del lado). Una carátula que falta no es un error.

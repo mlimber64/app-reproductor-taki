@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:taki/core/domain/entities/local_song.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:taki/core/domain/entities/music_identity.dart';
 import 'package:taki/features/library/domain/entities/favorite_entry.dart';
 import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/library/domain/ports/favorites_repository.dart';
@@ -14,30 +16,30 @@ class FakeFavoritesRepository implements FavoritesRepository {
   FakeFavoritesRepository({this.failing = false});
 
   bool failing;
-  final Map<int, FavoriteEntry> entries = {};
-  final List<(int, int)> relinks = [];
+  final Map<MusicIdentity, FavoriteEntry> entries = {};
+  final List<(MusicIdentity, MusicIdentity)> relinks = [];
   final _changes = StreamController<void>.broadcast();
   var _minutes = 0;
 
   /// Guarda un favorito directamente (p. ej. con datos de respaldo viejos).
-  void seed(FavoriteEntry entry) => entries[entry.songId] = entry;
+  void seed(FavoriteEntry entry) => entries[entry.musicIdentity] = entry;
 
-  FavoriteEntry entryFor(Song song, {int? songId, DateTime? addedAt}) {
+  FavoriteEntry entryFor(Song song, {MusicIdentity? identity, DateTime? addedAt}) {
     return FavoriteEntry(
-      songId: songId ?? song.id,
+      musicIdentity: identity ?? song.musicIdentity,
       addedAt: addedAt ?? DateTime(2026, 9, 1).add(Duration(minutes: _minutes++)),
       title: song.title,
       artist: song.artist,
       album: song.album,
       durationMs: song.durationMs,
-      path: song.path,
+      path: localPathOf(song),
     );
   }
 
   @override
-  Stream<Set<int>> watchFavoriteIds() {
+  Stream<Set<MusicIdentity>> watchFavoriteIdentities() {
     StreamSubscription<void>? subscription;
-    late final StreamController<Set<int>> controller;
+    late final StreamController<Set<MusicIdentity>> controller;
     void emit() {
       if (failing) {
         controller.addError(StateError('Base no disponible'));
@@ -46,7 +48,7 @@ class FakeFavoritesRepository implements FavoritesRepository {
       }
     }
 
-    controller = StreamController<Set<int>>(
+    controller = StreamController<Set<MusicIdentity>>(
       onListen: () {
         subscription = _changes.stream.listen((_) => emit());
         emit();
@@ -69,24 +71,24 @@ class FakeFavoritesRepository implements FavoritesRepository {
   @override
   Future<void> add(Song song) async {
     _check();
-    entries.putIfAbsent(song.id, () => entryFor(song));
+    entries.putIfAbsent(song.musicIdentity, () => entryFor(song));
     _changes.add(null);
   }
 
   @override
-  Future<void> remove(int songId) async {
+  Future<void> remove(MusicIdentity identity) async {
     _check();
-    entries.remove(songId);
+    entries.remove(identity);
     _changes.add(null);
   }
 
   @override
-  Future<void> relink(int oldSongId, Song song) async {
+  Future<void> relink(MusicIdentity oldIdentity, Song song) async {
     _check();
-    relinks.add((oldSongId, song.id));
-    final old = entries.remove(oldSongId);
-    if (old != null && !entries.containsKey(song.id)) {
-      entries[song.id] = entryFor(song, addedAt: old.addedAt);
+    relinks.add((oldIdentity, song.musicIdentity));
+    final old = entries.remove(oldIdentity);
+    if (old != null && !entries.containsKey(song.musicIdentity)) {
+      entries[song.musicIdentity] = entryFor(song, addedAt: old.addedAt);
     }
     _changes.add(null);
   }

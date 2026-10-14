@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/features/library/domain/entities/favorite_entry.dart';
 import 'package:taki/features/library/domain/usecases/favorites_usecases.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
 
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
@@ -16,7 +17,7 @@ void main() {
       final toggle = ToggleFavorite(favorites);
 
       expect(await toggle(song), isTrue);
-      expect(favorites.entries.keys, [7]);
+      expect(favorites.entries.keys, [localMusicIdentity(7)]);
 
       expect(await toggle(song), isFalse);
       expect(favorites.entries, isEmpty);
@@ -33,7 +34,7 @@ void main() {
       String? path,
     }) {
       return FavoriteEntry(
-        songId: songId,
+        musicIdentity: localMusicIdentity(songId),
         addedAt: DateTime(2026, 9, 1, 12, minute),
         title: title,
         artist: artist,
@@ -50,7 +51,7 @@ void main() {
         ..seed(stored(songId: 1, minute: 1))
         ..seed(stored(songId: 2, minute: 2));
 
-      final songs = await GetFavoriteSongs(favorites)([a, b]);
+      final songs = await GetFavoriteSongs(favorites, localLookupOver([a, b]))([a, b]);
 
       expect(songs, [b, a]);
       expect(favorites.relinks, isEmpty);
@@ -60,11 +61,11 @@ void main() {
       final song = buildSong(id: 50, title: 'Otra etiqueta');
       favorites.seed(stored(songId: 5, minute: 1, path: song.path));
 
-      final songs = await GetFavoriteSongs(favorites)([song]);
+      final songs = await GetFavoriteSongs(favorites, localLookupOver([song]))([song]);
 
       expect(songs, [song]);
-      expect(favorites.relinks, [(5, 50)]);
-      expect(favorites.entries.keys, [50]);
+      expect(favorites.relinks, [(localMusicIdentity(5), localMusicIdentity(50))]);
+      expect(favorites.entries.keys, [localMusicIdentity(50)]);
     });
 
     test('si tampoco hay ruta, coincide por título + artista + duración',
@@ -84,10 +85,10 @@ void main() {
         path: '/sdcard/antes/mi_cancion.mp3',
       ));
 
-      final songs = await GetFavoriteSongs(favorites)([song]);
+      final songs = await GetFavoriteSongs(favorites, localLookupOver([song]))([song]);
 
       expect(songs, [song]);
-      expect(favorites.relinks, [(6, 60)]);
+      expect(favorites.relinks, [(localMusicIdentity(6), localMusicIdentity(60))]);
     });
 
     test('no coincide si la duración difiere más de 1 s', () async {
@@ -100,7 +101,7 @@ void main() {
         durationMs: 7000,
       ));
 
-      expect(await GetFavoriteSongs(favorites)([song]), isEmpty);
+      expect(await GetFavoriteSongs(favorites, localLookupOver([song]))([song]), isEmpty);
     });
 
     test('los ausentes de la biblioteca se ocultan pero siguen guardados',
@@ -116,10 +117,10 @@ void main() {
           path: '/storage/sd/en_la_sd.mp3',
         ));
 
-      final songs = await GetFavoriteSongs(favorites)([present]);
+      final songs = await GetFavoriteSongs(favorites, localLookupOver([present]))([present]);
 
       expect(songs, [present]);
-      expect(favorites.entries.keys, containsAll([1, 9]));
+      expect(favorites.entries.keys, containsAll([localMusicIdentity(1), localMusicIdentity(9)]));
       expect(favorites.relinks, isEmpty);
     });
 
@@ -130,11 +131,11 @@ void main() {
         ..seed(stored(songId: 1, minute: 1))
         ..seed(stored(songId: 2, minute: 2, path: song.path));
 
-      expect(await GetFavoriteSongs(favorites)([song]), [song]);
+      expect(await GetFavoriteSongs(favorites, localLookupOver([song]))([song]), [song]);
     });
 
     test('sin favoritos devuelve una lista vacía', () async {
-      expect(await GetFavoriteSongs(favorites)([buildSong()]), isEmpty);
+      expect(await GetFavoriteSongs(favorites, localLookupOver([buildSong()]))([buildSong()]), isEmpty);
     });
   });
 }

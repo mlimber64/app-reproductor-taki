@@ -1,11 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/artwork/artwork_cache.dart';
-import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/artwork/album_artwork_builder.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_elevation.dart';
@@ -25,6 +23,8 @@ import '../../../library/presentation/providers/songs_notifier.dart';
 import '../../../player/presentation/providers/player_providers.dart';
 import '../../domain/entities/playlist.dart';
 import '../../domain/entities/playlist_entry.dart';
+import '../playlist_cover_albums.dart';
+import '../playlist_cover_images.dart';
 import '../providers/playlists_providers.dart';
 import '../widgets/delete_playlist_dialog.dart';
 import '../widgets/playlist_name_dialog.dart';
@@ -196,36 +196,40 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     }
 
     final library = ref.watch(songsProvider).valueOrNull;
-    if (library is LibraryNeedsPermission) {
-      return TakiErrorState(
-        kind: TakiErrorStateKind.permission,
-        title: 'Taki necesita acceso a tu música',
-        message: 'Las playlists se muestran a partir de las canciones de tu '
-            'teléfono.',
-        action: TakiStateAction(
-          label:
-              library.permanentlyDenied ? 'Abrir ajustes' : 'Permitir acceso',
-          onPressed: ref.read(songsProvider.notifier).requestPermission,
-        ),
-      );
-    }
 
     return ref.watch(playlistItemsProvider(_id)).when(
           skipLoadingOnReload: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (_, _) => _error(),
-          data: (items) => RefreshIndicator(
-            onRefresh: ref.read(songsProvider.notifier).rescan,
-            child: _SongList(
-              playlist: playlist,
-              items: _optimistic ?? items,
-              onPlay: _play,
-              onShuffle: _playShuffled,
-              onReorder: _reorder,
-              onRemove: _remove,
-              onSongActions: widget.onSongActions,
-            ),
-          ),
+          // El permiso de música solo hace falta para la fuente local: las
+          // canciones de otras fuentes se muestran igual. Sin permiso y sin
+          // nada que mostrar, se pide (como antes).
+          data: (items) => items.isEmpty && library is LibraryNeedsPermission
+              ? TakiErrorState(
+                  kind: TakiErrorStateKind.permission,
+                  title: 'Taki necesita acceso a tu música',
+                  message: 'Las playlists se muestran a partir de las '
+                      'canciones de tu teléfono.',
+                  action: TakiStateAction(
+                    label: library.permanentlyDenied
+                        ? 'Abrir ajustes'
+                        : 'Permitir acceso',
+                    onPressed:
+                        ref.read(songsProvider.notifier).requestPermission,
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: ref.read(songsProvider.notifier).rescan,
+                  child: _SongList(
+                    playlist: playlist,
+                    items: _optimistic ?? items,
+                    onPlay: _play,
+                    onShuffle: _playShuffled,
+                    onReorder: _reorder,
+                    onRemove: _remove,
+                    onSongActions: widget.onSongActions,
+                  ),
+                ),
         );
   }
 
@@ -279,8 +283,8 @@ class _SongList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Solo la canción actual y si suena: no reconstruir con la posición.
-    final currentSongId = ref.watch(
-      currentSongProvider.select((song) => song.valueOrNull?.id),
+    final currentIdentity = ref.watch(
+      currentSongProvider.select((song) => song.valueOrNull?.musicIdentity),
     );
     final isPlaying = ref.watch(
           playbackStateProvider.select((state) => state.valueOrNull?.isPlaying),
@@ -329,7 +333,7 @@ class _SongList extends ConsumerWidget {
           key: ValueKey(item.entry.id),
           song: item.song,
           listIndex: index,
-          playback: item.song.id != currentSongId
+          playback: item.song.musicIdentity != currentIdentity
               ? TakiNowPlaying.none
               : isPlaying
                   ? TakiNowPlaying.playing
@@ -396,12 +400,12 @@ class _SongRow extends StatelessWidget {
       return TakiSongTile(song: song, onMore: () {}, trailing: handle);
     }
 
-    return _ArtworkImages(
-      albumIds: [?song.albumId],
+    return AlbumArtworkBuilder.reference(
+      reference: song.artwork,
       size: TakiSongTile.artworkSize,
-      builder: (images) => TakiSongTile(
+      builder: (_, artwork) => TakiSongTile(
         song: song,
-        artwork: images.firstOrNull,
+        artwork: artwork,
         playback: playback,
         onTap: onTap,
         onLongPress: onActions,
@@ -436,11 +440,11 @@ class _Header extends StatelessWidget {
       Duration.zero,
       (sum, item) => sum + item.song.duration,
     );
-    // Como antes: álbumes distintos de las 4 primeras canciones visibles; con
-    // 4, mosaico; con menos, la primera carátula.
-    final albums = <int>{
-      for (final item in items.take(4)) ?item.song.albumId,
-    }.toList();
+    // Las 4 primeras canciones *visibles* (las ausentes de la biblioteca no
+    // están en `items`); no `Playlist.coverIdentities`, como usa la lista.
+    final coverArtwork = playlistCoverArtwork(
+      items.take(4).map((item) => item.song.artwork),
+    );
 
     return Container(
       color: TakiElevation.raised.surface,
@@ -456,17 +460,11 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
-              _ArtworkImages(
-                albumIds: albums,
+              PlaylistCoverImages(
+                artwork: coverArtwork,
                 size: coverSize,
-                builder: (images) => TakiArtwork.mosaic(
-                  size: coverSize,
-                  // Vacía: sin imágenes (placeholder con borde). Con
-                  // canciones pero sin carátulas: una pieza sin imagen.
-                  images: items.isEmpty || images.isNotEmpty
-                      ? images
-                      : const [null],
-                ),
+                builder: (images) =>
+                    TakiArtwork.mosaic(size: coverSize, images: images),
               ),
               const SizedBox(width: TakiSpacing.lg),
               Expanded(
@@ -525,79 +523,5 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// Resuelve carátulas con [ArtworkCache] (bytes → `MemoryImage`) para la
-/// portada y las filas, como la Biblioteca y la lista de Playlists (adaptador
-/// repetido: ver docs/DESIGN_SYSTEM.md, Fase 1.7C-2).
-class _ArtworkImages extends ConsumerStatefulWidget {
-  const _ArtworkImages({
-    required this.albumIds,
-    required this.size,
-    required this.builder,
-  });
-
-  final List<int> albumIds;
-  final double size;
-  final Widget Function(List<ImageProvider?> images) builder;
-
-  @override
-  ConsumerState<_ArtworkImages> createState() => _ArtworkImagesState();
-}
-
-class _ArtworkImagesState extends ConsumerState<_ArtworkImages> {
-  List<ArtworkKey> _keys = const [];
-  final Map<ArtworkKey, Uint8List?> _bytes = {};
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(_ArtworkImages oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!listEquals(oldWidget.albumIds, widget.albumIds) ||
-        oldWidget.size != widget.size) {
-      _resolve();
-    }
-  }
-
-  void _resolve() {
-    final size =
-        (widget.size * MediaQuery.devicePixelRatioOf(context)).round();
-    final keys = [
-      for (final albumId in widget.albumIds) (albumId: albumId, size: size),
-    ];
-    if (listEquals(keys, _keys)) return;
-    _keys = keys;
-    _bytes.removeWhere((key, _) => !keys.contains(key));
-
-    final cache = ref.read(artworkCacheProvider);
-    for (final key in keys) {
-      if (_bytes.containsKey(key)) continue;
-      if (cache.contains(key)) {
-        _bytes[key] = cache.peek(key);
-        continue;
-      }
-      cache.load(key).then((bytes) {
-        if (mounted && _keys.contains(key)) {
-          setState(() => _bytes[key] = bytes);
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.builder([
-      for (final key in _keys)
-        switch (_bytes[key]) {
-          final bytes? when bytes.isNotEmpty => MemoryImage(bytes),
-          _ => null,
-        },
-    ]);
   }
 }

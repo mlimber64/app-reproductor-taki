@@ -1,10 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/artwork/artwork_cache.dart';
-import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/artwork/album_artwork_builder.dart';
+import '../../../../core/domain/entities/music_identity.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_elevation.dart';
@@ -37,14 +35,17 @@ class _QueuePageState extends ConsumerState<QueuePage> {
   List<Song>? _keyedQueue;
   List<Key> _keys = const [];
 
-  /// Claves estables aunque una canción esté repetida en la cola: id +
+  /// Claves estables aunque una canción esté repetida en la cola: identidad +
   /// número de aparición. Se recalculan solo cuando cambia la cola.
   List<Key> _keysFor(List<Song> queue) {
     if (identical(queue, _keyedQueue)) return _keys;
-    final seen = <int, int>{};
+    final seen = <MusicIdentity, int>{};
     _keys = [
       for (final song in queue)
-        ValueKey((song.id, seen[song.id] = (seen[song.id] ?? 0) + 1)),
+        ValueKey((
+          song.musicIdentity,
+          seen[song.musicIdentity] = (seen[song.musicIdentity] ?? 0) + 1,
+        )),
     ];
     _keyedQueue = queue;
     return _keys;
@@ -310,9 +311,10 @@ class _NowPlayingCard extends StatelessWidget {
         borderRadius: TakiRadius.mdAll,
         child: ColoredBox(
           color: TakiElevation.raised.surface,
-          child: _SongArtwork(
-            albumId: song.albumId,
-            builder: (artwork) => TakiSongTile(
+          child: AlbumArtworkBuilder.reference(
+            reference: song.artwork,
+            size: TakiSongTile.artworkSize,
+            builder: (_, artwork) => TakiSongTile(
               song: song,
               artwork: artwork,
               showDuration: false,
@@ -387,82 +389,16 @@ class _QueueRow extends StatelessWidget {
       return TakiSongTile(song: song, showDuration: false, trailing: trailing);
     }
 
-    return _SongArtwork(
-      albumId: song.albumId,
-      builder: (artwork) => TakiSongTile(
+    return AlbumArtworkBuilder.reference(
+      reference: song.artwork,
+      size: TakiSongTile.artworkSize,
+      builder: (_, artwork) => TakiSongTile(
         song: song,
         artwork: artwork,
         showDuration: false,
         onTap: onTap,
         trailing: trailing,
       ),
-    );
-  }
-}
-
-/// Resuelve la carátula de una fila con [ArtworkCache] (bytes →
-/// `MemoryImage`), la misma fuente que Reproduciendo y el resto de la app.
-class _SongArtwork extends ConsumerStatefulWidget {
-  const _SongArtwork({required this.albumId, required this.builder});
-
-  final int? albumId;
-  final Widget Function(ImageProvider? artwork) builder;
-
-  @override
-  ConsumerState<_SongArtwork> createState() => _SongArtworkState();
-}
-
-class _SongArtworkState extends ConsumerState<_SongArtwork> {
-  ArtworkKey? _key;
-  Uint8List? _bytes;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(_SongArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.albumId != widget.albumId) _resolve();
-  }
-
-  void _resolve() {
-    final albumId = widget.albumId;
-    if (albumId == null) {
-      _key = null;
-      _bytes = null;
-      return;
-    }
-
-    final key = (
-      albumId: albumId,
-      size: (TakiSongTile.artworkSize * MediaQuery.devicePixelRatioOf(context))
-          .round(),
-    );
-    if (key == _key) return;
-    _key = key;
-
-    final cache = ref.read(artworkCacheProvider);
-    if (cache.contains(key)) {
-      _bytes = cache.peek(key);
-      return;
-    }
-
-    _bytes = null;
-    cache.load(key).then((bytes) {
-      if (mounted && _key == key) setState(() => _bytes = bytes);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bytes = _bytes;
-    // Los bytes son la clave del MemoryImage: tras un reescaneo llegan bytes
-    // nuevos y la imagen se actualiza.
-    return widget.builder(
-      bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
     );
   }
 }

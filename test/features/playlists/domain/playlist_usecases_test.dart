@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/features/playlists/domain/entities/playlist_entry.dart';
 import 'package:taki/features/playlists/domain/entities/playlist_name.dart';
 import 'package:taki/features/playlists/domain/usecases/playlist_usecases.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
 
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/playlists_fakes.dart';
@@ -62,7 +63,7 @@ void main() {
 
     expect(await add(id, [b]), isFalse);
     expect(await add(id, [a]), isTrue);
-    expect(playlists.entriesOf(id).map((e) => e.songId), [1, 2, 1]);
+    expect(playlists.entriesOf(id).map((e) => e.musicIdentity), [1, 2, 1].map(localMusicIdentity));
   });
 
   test('RemoveFromPlaylist quita y undo la vuelve a su sitio', () async {
@@ -71,10 +72,10 @@ void main() {
     final remove = RemoveFromPlaylist(playlists);
 
     await remove(entry);
-    expect(playlists.entriesOf(id).map((e) => e.songId), [1, 3]);
+    expect(playlists.entriesOf(id).map((e) => e.musicIdentity), [1, 3].map(localMusicIdentity));
 
     await remove.undo(entry);
-    expect(playlists.entriesOf(id).map((e) => e.songId), [1, 2, 3]);
+    expect(playlists.entriesOf(id).map((e) => e.musicIdentity), [1, 2, 3].map(localMusicIdentity));
   });
 
   test('MovePlaylistSong delega e ignora movimientos nulos', () async {
@@ -85,14 +86,14 @@ void main() {
     await move(id, 1, 1);
     await move(id, -1, 0);
 
-    expect(playlists.entriesOf(id).map((e) => e.songId), [2, 3, 1]);
+    expect(playlists.entriesOf(id).map((e) => e.musicIdentity), [2, 3, 1].map(localMusicIdentity));
   });
 
   group('GetPlaylistSongs', () {
     test('cruza con la biblioteca, en orden y con duplicados', () async {
       final id = playlists.seed('Mix', songs: [b, a, b]);
 
-      final items = await GetPlaylistSongs(playlists)(id, [a, b, c]);
+      final items = await GetPlaylistSongs(playlists, localLookupOver([a, b, c]))(id, [a, b, c]);
 
       expect(items.map((i) => i.song), [b, a, b]);
       expect(items.map((i) => i.entry.position), [0, 1, 2]);
@@ -107,23 +108,23 @@ void main() {
           id: entryId,
           playlistId: id,
           position: position,
-          songId: 1,
+          musicIdentity: localMusicIdentity(1),
           path: moved.path,
         ),
       );
 
-      final items = await GetPlaylistSongs(playlists)(id, [moved]);
+      final items = await GetPlaylistSongs(playlists, localLookupOver([moved]))(id, [moved]);
 
       expect(items.single.song, moved);
-      expect(items.single.entry.songId, 50);
-      expect(playlists.relinks, [(items.single.entry.id, 50)]);
-      expect(playlists.entriesOf(id).single.songId, 50);
+      expect(items.single.entry.musicIdentity, localMusicIdentity(50));
+      expect(playlists.relinks, [(items.single.entry.id, localMusicIdentity(50))]);
+      expect(playlists.entriesOf(id).single.musicIdentity, localMusicIdentity(50));
     });
 
     test('oculta las ausentes pero no las borra', () async {
       final id = playlists.seed('Mix', songs: [a, b, c]);
 
-      final items = await GetPlaylistSongs(playlists)(id, [a, c]);
+      final items = await GetPlaylistSongs(playlists, localLookupOver([a, c]))(id, [a, c]);
 
       expect(items.map((i) => i.song), [a, c]);
       expect(items.map((i) => i.entry.position), [0, 2]);

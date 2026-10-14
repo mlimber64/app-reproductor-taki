@@ -1,12 +1,18 @@
+import 'dart:async';
+
+import 'package:taki/core/domain/entities/local_song.dart';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:taki/core/domain/entities/music_identity.dart';
 import 'package:taki/features/player/domain/entities/playback_error.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart'
     as player;
 import 'package:taki/features/player/infrastructure/artwork_file_cache.dart';
 import 'package:taki/features/player/infrastructure/taki_audio_handler.dart';
 
+import '../../../helpers/universal_song.dart';
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
 
@@ -176,7 +182,9 @@ void main() {
     await emit(player.PlaybackState(queue: queue, currentIndex: 0));
 
     final item = handler.mediaItem.value!;
-    expect(item.id, songA.contentUri);
+    expect(item.id, 'local/1');
+    expect(item.id, TakiAudioHandler.mediaIdFor(songA.musicIdentity));
+    expect(item.id, isNot(songA.contentUri));
     expect(item.title, 'A');
     expect(item.artist, 'Artista A');
     expect(item.album, songA.album);
@@ -191,6 +199,166 @@ void main() {
     await emit(player.PlaybackState(queue: queue, currentIndex: 0));
 
     expect(handler.mediaItem.value!.artUri, uri);
+  });
+
+  group('MediaItem.id', () {
+    test('identifica la canción, no su recurso: no depende de contentUri',
+        () async {
+      // Misma identidad, distinta URI de contenido → mismo id.
+      final moved = LocalSong(
+        id: 1,
+        title: 'A',
+        artist: null,
+        album: null,
+        albumId: null,
+        artwork: const UnavailableArtworkReference(),
+        durationMs: 1,
+        path: '',
+        contentUri: 'content://otro-volumen/1',
+      );
+      expect(moved.contentUri, isNot(songA.contentUri));
+      expect(
+        TakiAudioHandler.mediaIdFor(moved.musicIdentity),
+        TakiAudioHandler.mediaIdFor(songA.musicIdentity),
+      );
+
+      // Canción de otra fuente sin contentUri: igualmente tiene id.
+      final foreign = buildUniversalSong(MusicIdentity('otra', 'abc'));
+      await emit(player.PlaybackState(queue: [foreign], currentIndex: 0));
+      expect(handler.mediaItem.value!.id, 'otra/abc');
+      expect(foreign, isNot(isA<LocalSong>())); // sin datos locales
+    });
+
+    test('identidades distintas dan ids distintos', () {
+      final ids = {
+        TakiAudioHandler.mediaIdFor(MusicIdentity('local', '1')),
+        TakiAudioHandler.mediaIdFor(MusicIdentity('local', '2')),
+        TakiAudioHandler.mediaIdFor(MusicIdentity('otra', '1')),
+      };
+      expect(ids, hasLength(3));
+    });
+
+    test('sin ambigüedad con separadores dentro de las partes', () {
+      // «a/b» + «c» y «a» + «b/c» no pueden colisionar.
+      expect(
+        TakiAudioHandler.mediaIdFor(MusicIdentity('a/b', 'c')),
+        isNot(TakiAudioHandler.mediaIdFor(MusicIdentity('a', 'b/c'))),
+      );
+      expect(
+        TakiAudioHandler.mediaIdFor(MusicIdentity('a:b', 'c')),
+        isNot(TakiAudioHandler.mediaIdFor(MusicIdentity('a', 'b:c'))),
+      );
+    });
+
+    test('el externalId se conserva tal cual (mayúsculas, espacios)', () {
+      expect(
+        TakiAudioHandler.mediaIdFor(MusicIdentity('s', 'AbC 1')),
+        isNot(TakiAudioHandler.mediaIdFor(MusicIdentity('s', 'abc 1'))),
+      );
+    });
+
+    test('una carátula tardía de la canción anterior no se pega a la actual',
+        () async {
+      final slow = Completer<Uri?>();
+      final uri = Uri.file('/data/cache/artwork/album_10_512.jpg');
+      when(() => artwork.artUriFor(songA)).thenAnswer((_) => slow.future);
+
+      await emit(player.PlaybackState(queue: queue, currentIndex: 0));
+      await emit(player.PlaybackState(queue: queue, currentIndex: 1));
+      slow.complete(uri);
+      await pumpEventQueue();
+
+      expect(handler.mediaItem.value!.id, 'local/2');
+      expect(handler.mediaItem.value!.artUri, isNull);
+    });
+
+    test('canción remota con carátula remota: recibe el artUri file:// que '
+        'resuelve la caché', () async {
+      final remoteA = buildUniversalSong(
+        MusicIdentity('otra', 'a'),
+        artwork: RemoteArtworkReference('https://img.test/a.jpg'),
+      );
+      final uri = Uri.file('/data/cache/artwork/remote_af63dc4c8601ec8c.img');
+      when(() => artwork.artUriFor(remoteA)).thenAnswer((_) async => uri);
+
+      await emit(player.PlaybackState(queue: [remoteA], currentIndex: 0));
+
+      final item = handler.mediaItem.value!;
+      expect(item.id, 'otra/a');
+      expect(item.title, remoteA.title);
+      expect(item.artUri, uri);
+      expect(item.artUri!.scheme, 'file');
+    });
+
+    test('la metadata remota se publica antes de esperar la carátula',
+        () async {
+      final remoteA = buildUniversalSong(
+        MusicIdentity('otra', 'a'),
+        artwork: RemoteArtworkReference('https://img.test/a.jpg'),
+      );
+      final slow = Completer<Uri?>();
+      when(() => artwork.artUriFor(remoteA)).thenAnswer((_) => slow.future);
+
+      await emit(player.PlaybackState(queue: [remoteA], currentIndex: 0));
+
+      expect(handler.mediaItem.value!.id, 'otra/a');
+      expect(handler.mediaItem.value!.artUri, isNull);
+      slow.complete(Uri.file('/c/remote_x.img'));
+      await pumpEventQueue();
+      expect(handler.mediaItem.value!.artUri, Uri.file('/c/remote_x.img'));
+    });
+
+    test('una carátula remota que falla (null) no rompe el MediaItem',
+        () async {
+      final remoteA = buildUniversalSong(
+        MusicIdentity('otra', 'a'),
+        artwork: RemoteArtworkReference('https://img.test/a.jpg'),
+      );
+      when(() => artwork.artUriFor(remoteA)).thenAnswer((_) async => null);
+
+      await emit(player.PlaybackState(queue: [remoteA], currentIndex: 0));
+
+      expect(handler.mediaItem.value!.id, 'otra/a');
+      expect(handler.mediaItem.value!.artUri, isNull);
+    });
+
+    test('A → B con carátulas remotas: la tardía de A nunca se publica sobre B',
+        () async {
+      final remoteA = buildUniversalSong(
+        MusicIdentity('otra', 'a'),
+        artwork: RemoteArtworkReference('https://img.test/a.jpg'),
+      );
+      final remoteB = buildUniversalSong(
+        MusicIdentity('otra', 'b'),
+        artwork: RemoteArtworkReference('https://img.test/b.jpg'),
+      );
+      final slowA = Completer<Uri?>();
+      final uriA = Uri.file('/c/remote_a.img');
+      final uriB = Uri.file('/c/remote_b.img');
+      when(() => artwork.artUriFor(remoteA)).thenAnswer((_) => slowA.future);
+      when(() => artwork.artUriFor(remoteB)).thenAnswer((_) async => uriB);
+
+      await emit(player.PlaybackState(queue: [remoteA, remoteB], currentIndex: 0));
+      await emit(player.PlaybackState(queue: [remoteA, remoteB], currentIndex: 1));
+      expect(handler.mediaItem.value!.artUri, uriB);
+
+      slowA.complete(uriA); // llega tarde
+      await pumpEventQueue();
+
+      expect(handler.mediaItem.value!.id, 'otra/b');
+      expect(handler.mediaItem.value!.artUri, uriB);
+    });
+
+    test('la carátula de la canción actual sí se adjunta, conservando el id',
+        () async {
+      final uri = Uri.file('/data/cache/artwork/album_10_512.jpg');
+      when(() => artwork.artUriFor(songA)).thenAnswer((_) async => uri);
+
+      await emit(player.PlaybackState(queue: queue, currentIndex: 0));
+
+      expect(handler.mediaItem.value!.id, 'local/1');
+      expect(handler.mediaItem.value!.artUri, uri);
+    });
   });
 
   test('un error de canción no rompe la cola', () async {
@@ -208,7 +376,7 @@ void main() {
     expect(state.processingState, AudioProcessingState.ready);
     expect(state.playing, isTrue);
     expect(state.queueIndex, 1);
-    expect(handler.mediaItem.value!.id, songB.contentUri);
+    expect(handler.mediaItem.value!.id, 'local/2');
     expect(port.calls, isNot(contains('stop')));
 
     // Los controles siguen funcionando.

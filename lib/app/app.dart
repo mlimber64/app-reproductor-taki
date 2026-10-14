@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/router.dart';
 import '../app/theme/app_theme.dart';
 import '../features/library/presentation/providers/favorites_providers.dart';
+import '../features/player/presentation/widgets/playback_error_listener.dart';
 
 class TakiApp extends ConsumerWidget {
   const TakiApp({super.key});
@@ -30,6 +31,9 @@ class TakiApp extends ConsumerWidget {
       locale: locale,
       supportedLocales: const [locale],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      // Aviso discreto cuando una canción no se puede reproducir.
+      builder: (context, child) =>
+          PlaybackErrorListener(child: child ?? const SizedBox.shrink()),
       routerConfig: router,
     );
   }

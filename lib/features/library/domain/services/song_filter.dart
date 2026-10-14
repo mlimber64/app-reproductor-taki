@@ -1,5 +1,5 @@
 import '../../../../core/constants/library_constants.dart';
-import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/entities/local_song.dart';
 
 /// Decide qué audios son canciones de la biblioteca.
 ///
@@ -21,13 +21,13 @@ class SongFilter {
 
   static final RegExp _separator = RegExp(r'[/\\]');
 
-  bool accepts(Song song) =>
+  bool accepts(LocalSong song) =>
       song.durationMs >= minDuration.inMilliseconds &&
       !_isInExcludedFolder(song);
 
-  List<Song> apply(Iterable<Song> songs) => songs.where(accepts).toList();
+  List<LocalSong> apply(Iterable<LocalSong> songs) => songs.where(accepts).toList();
 
-  bool _isInExcludedFolder(Song song) {
+  bool _isInExcludedFolder(LocalSong song) {
     // Si la fuente no dio la carpeta, se usa la de la ruta del archivo.
     final folder = song.folder.isNotEmpty ? song.folder : _parentOf(song.path);
     return folder

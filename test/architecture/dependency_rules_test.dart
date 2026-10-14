@@ -65,7 +65,111 @@ void main() {
     ];
     expect(violations, isEmpty, reason: violations.join('\n'));
   });
+
+  // Fase 3.2B: la búsqueda de catálogo es provider-neutral. Depende solo de
+  // abstracciones de `core`; el proveedor se enchufa desde `app/`.
+  test('features/search solo importa de otra feature el provider del Player',
+      () {
+    final violations = [
+      for (final i in imports)
+        if (i.fromFeature == 'search' &&
+            i.toFeature != null &&
+            i.toFeature != 'search' &&
+            i.to != _searchPlayerProviders)
+          i,
+    ];
+    expect(violations, isEmpty, reason: violations.join('\n'));
+  });
+
+  test('features/search no importa features/jamendo directamente', () {
+    final violations = [
+      for (final i in imports)
+        if (i.fromFeature == 'search' && i.to.startsWith('features/jamendo/'))
+          i,
+    ];
+    expect(violations, isEmpty, reason: violations.join('\n'));
+  });
+
+  test('features/search no depende de app', () {
+    final violations = [
+      for (final i in imports)
+        if (i.fromFeature == 'search' && i.toLayer == 'app') i,
+    ];
+    expect(violations, isEmpty, reason: violations.join('\n'));
+  });
+
+  test('features/search no menciona a ningún proveedor concreto', () {
+    final files = Directory('lib/features/search')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .toList();
+    expect(files, isNotEmpty);
+    final offenders = [
+      for (final file in files)
+        if (RegExp('jamendo', caseSensitive: false)
+            .hasMatch(file.readAsStringSync()))
+          file.path,
+    ];
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
+  // Fase 3.2F: Reproduciendo pide la atribución por el contrato de `core`; no
+  // conoce a ningún proveedor.
+  test('features/player no importa features/jamendo ni lo menciona', () {
+    final violations = [
+      for (final i in imports)
+        if (i.fromFeature == 'player' && i.to.startsWith('features/jamendo/'))
+          i,
+    ];
+    expect(violations, isEmpty, reason: violations.join('\n'));
+    final offenders = [
+      for (final file in Directory('lib/features/player')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart')))
+        if (RegExp('jamendo', caseSensitive: false)
+            .hasMatch(file.readAsStringSync()))
+          file.path,
+    ];
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
+  // Fase 3.6: las portadas de playlist usan el artwork de `core`; no conocen a
+  // ningún proveedor.
+  test('features/playlists no importa features/jamendo ni lo menciona', () {
+    final violations = [
+      for (final i in imports)
+        if (i.fromFeature == 'playlists' && i.to.startsWith('features/jamendo/'))
+          i,
+    ];
+    expect(violations, isEmpty, reason: violations.join('\n'));
+    final offenders = [
+      for (final file in Directory('lib/features/playlists')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart')))
+        if (RegExp('jamendo', caseSensitive: false)
+            .hasMatch(file.readAsStringSync()))
+          file.path,
+    ];
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
+  test('search tiene una única excepción entre features (3.2C)', () {
+    expect(
+      _allowedCrossFeature.where((e) => e.contains('features/search/')),
+      {
+        'features/search/presentation/pages/search_page.dart -> '
+            '$_searchPlayerProviders',
+      },
+    );
+  });
 }
+
+/// Provider del Player que `SearchPage` usa para reproducir un resultado.
+const String _searchPlayerProviders =
+    'features/player/presentation/providers/player_providers.dart';
 
 /// Imports entre features permitidos: solo providers de presentación.
 const Set<String> _allowedCrossFeature = {
@@ -84,6 +188,9 @@ const Set<String> _allowedCrossFeature = {
       'features/library/presentation/providers/songs_notifier.dart',
   'features/playlists/presentation/pages/playlist_detail_page.dart -> '
       'features/library/presentation/providers/songs_notifier.dart',
+  // Buscar reproduce el resultado tocado y marca la canción que suena.
+  'features/search/presentation/pages/search_page.dart -> '
+      'features/player/presentation/providers/player_providers.dart',
   // El detalle de playlist reproduce, mezcla y marca la canción que suena.
   'features/playlists/presentation/pages/playlist_detail_page.dart -> '
       'features/player/presentation/providers/player_providers.dart',

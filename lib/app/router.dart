@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/catalog/catalog_sources_providers.dart';
 import '../features/library/presentation/pages/favorites_page.dart';
 import '../features/library/presentation/pages/library_page.dart';
 import '../features/player/presentation/pages/now_playing_page.dart';
@@ -9,11 +10,13 @@ import '../features/player/presentation/pages/queue_page.dart';
 import '../features/player/presentation/widgets/mini_player.dart';
 import '../features/playlists/presentation/pages/playlist_detail_page.dart';
 import '../features/playlists/presentation/pages/playlists_page.dart';
+import '../features/search/presentation/pages/search_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
 import 'widgets/song_actions_sheet.dart';
 
 abstract final class AppRoutes {
   static const String library = '/library';
+  static const String search = '/search';
   static const String playlists = '/playlists';
   static String playlistDetail(int id) => '/playlists/$id';
   static const String favorites = '/favorites';
@@ -25,12 +28,15 @@ abstract final class AppRoutes {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
+  // «Buscar» solo existe si hay algún catálogo; es una propiedad de la build
+  // (credenciales), no cambia mientras la app corre.
+  final hasSearch = ref.read(catalogSourcesProvider).isAvailable;
   final router = GoRouter(
     initialLocation: AppRoutes.library,
     routes: [
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
-            AppShell(navigationShell: navigationShell),
+            AppShell(navigationShell: navigationShell, hasSearch: hasSearch),
         branches: [
           StatefulShellBranch(
             routes: [
@@ -41,6 +47,17 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // Las ramas van en el mismo orden que los destinos de [AppShell].
+          if (hasSearch)
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.search,
+                  builder: (context, state) =>
+                      const SearchPage(onSongActions: showSongActions),
+                ),
+              ],
+            ),
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -128,9 +145,17 @@ CustomTransitionPage<void> _slideUpPage(GoRouterState state, Widget child) {
 
 /// Shell con barra de navegación inferior; conserva el estado de cada pestaña.
 class AppShell extends StatelessWidget {
-  const AppShell({super.key, required this.navigationShell});
+  const AppShell({
+    super.key,
+    required this.navigationShell,
+    required this.hasSearch,
+  });
 
   final StatefulNavigationShell navigationShell;
+
+  /// Añade el destino «Buscar» (entre Biblioteca y Playlists). Debe coincidir
+  /// con las ramas del router: el índice del destino es el de la rama.
+  final bool hasSearch;
 
   void _onDestinationSelected(int index) {
     navigationShell.goBranch(
@@ -151,23 +176,28 @@ class AppShell extends StatelessWidget {
           NavigationBar(
             selectedIndex: navigationShell.currentIndex,
             onDestinationSelected: _onDestinationSelected,
-            destinations: const [
-              NavigationDestination(
+            destinations: [
+              const NavigationDestination(
                 icon: Icon(Icons.library_music_outlined),
                 selectedIcon: Icon(Icons.library_music),
                 label: LibraryPage.title,
               ),
-              NavigationDestination(
+              if (hasSearch)
+                const NavigationDestination(
+                  icon: Icon(Icons.search_rounded),
+                  label: SearchPage.title,
+                ),
+              const NavigationDestination(
                 icon: Icon(Icons.queue_music_outlined),
                 selectedIcon: Icon(Icons.queue_music),
                 label: PlaylistsPage.title,
               ),
-              NavigationDestination(
+              const NavigationDestination(
                 icon: Icon(Icons.favorite_outline),
                 selectedIcon: Icon(Icons.favorite),
                 label: FavoritesPage.title,
               ),
-              NavigationDestination(
+              const NavigationDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings),
                 label: SettingsPage.title,

@@ -1,4 +1,8 @@
+import '../../../../core/domain/entities/local_music_identity.dart';
+import '../../../../core/domain/entities/local_song.dart';
 import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/ports/song_lookup.dart';
+import '../../../../core/domain/services/isolated_song_lookup.dart';
 import '../../../../core/domain/services/song_matcher.dart';
 import '../entities/playlist_entry.dart';
 import '../entities/playlist_name.dart';
@@ -48,10 +52,11 @@ class AddSongsToPlaylist {
   Future<bool> call(int playlistId, List<Song> songs) async {
     if (songs.isEmpty) return false;
     final existing = {
-      for (final entry in await _playlists.getEntries(playlistId)) entry.songId,
+      for (final entry in await _playlists.getEntries(playlistId))
+        entry.musicIdentity,
     };
     await _playlists.addSongs(playlistId, songs);
-    return songs.any((song) => existing.contains(song.id));
+    return songs.any((song) => existing.contains(song.musicIdentity));
   }
 }
 
@@ -79,43 +84,68 @@ class MovePlaylistSong {
   }
 }
 
-/// Entradas de la playlist resueltas contra la biblioteca, en orden.
+/// Entradas de la playlist resueltas a canciones, de cualquier fuente, en orden.
 ///
-/// Usa el mismo [SongMatcher] que favoritos; si reencuentra una canción por un
-/// criterio distinto al id, guarda el id nuevo. Las entradas que no están en
-/// la biblioteca se ocultan pero no se borran.
+/// Misma resolución que favoritos: las identidades de **todas** las entradas
+/// (con sus repeticiones) se resuelven en un lote con el [SongLookup]; a las
+/// entradas locales `missing` se les aplica el reencuentro local
+/// ([SongMatcher]) sobre la biblioteca y, si aparece con otra identidad, se
+/// guarda la nueva (`relink`).
+///
+/// - Conserva **orden y duplicados**: se recorre cada entrada guardada, no el
+///   conjunto de identidades; la misma canción dos veces da dos elementos, cada
+///   uno con su propia entrada.
+/// - Las entradas que no se resuelven (ausentes, fuente sin lookup) se ocultan
+///   pero no se borran.
+/// - El fallo de una fuente solo oculta **sus** entradas (sin reencuentro ni
+///   borrado, y sin pasar a `missing`); si fallan todas las fuentes consultadas,
+///   el error llega a quien llama.
 class GetPlaylistSongs {
-  const GetPlaylistSongs(this._playlists);
+  const GetPlaylistSongs(this._playlists, this._lookup);
 
   final PlaylistsRepository _playlists;
+  final SongLookup _lookup;
 
-  Future<List<PlaylistItem>> call(int playlistId, List<Song> library) async {
+  /// [library] es la biblioteca local, solo para el reencuentro local.
+  Future<List<PlaylistItem>> call(int playlistId, List<LocalSong> library) async {
     final entries = await _playlists.getEntries(playlistId);
     if (entries.isEmpty) return const [];
 
+    final isolated = await findAllIsolatingSources(_lookup, {
+      for (final entry in entries) entry.musicIdentity,
+    });
+    final resolved = isolated.result;
     final matcher = SongMatcher(library);
+
     final items = <PlaylistItem>[];
     for (final entry in entries) {
-      final song = matcher.match(entry);
+      final identity = entry.musicIdentity;
+      // Su fuente falló: se oculta; ni reencuentro, ni relink, ni borrado.
+      if (isolated.failed.contains(identity)) continue;
+      final song = resolved.found[identity] ??
+          (resolved.missing.contains(identity) &&
+                  identity.source == localMusicSource
+              ? matcher.match(entry)
+              : null);
       if (song == null) continue;
-      if (song.id == entry.songId) {
+      if (song.musicIdentity == identity) {
         items.add(PlaylistItem(entry: entry, song: song));
         continue;
       }
       await _playlists.relink(entry.id, song);
-      // La entrada que se muestra ya lleva el id y el respaldo nuevos (así un
+      // La entrada que se muestra ya lleva la identidad y el respaldo nuevos (así un
       // Deshacer la reinserta bien).
       items.add(PlaylistItem(
         entry: PlaylistEntry(
           id: entry.id,
           playlistId: entry.playlistId,
           position: entry.position,
-          songId: song.id,
+          musicIdentity: song.musicIdentity,
           title: song.title,
           artist: song.artist,
           album: song.album,
           durationMs: song.durationMs,
-          path: song.path,
+          path: localPathOf(song),
         ),
         song: song,
       ));

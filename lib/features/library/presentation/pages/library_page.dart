@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/artwork/artwork_cache.dart';
-import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/artwork/album_artwork_builder.dart';
 import '../../../../core/constants/library_constants.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
@@ -130,8 +128,8 @@ class _SongList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final songs = library.songs;
     // Solo la canción actual y si suena: no reconstruir con la posición.
-    final currentSongId = ref.watch(
-      currentSongProvider.select((song) => song.valueOrNull?.id),
+    final currentIdentity = ref.watch(
+      currentSongProvider.select((song) => song.valueOrNull?.musicIdentity),
     );
     final isPlaying = ref.watch(
           playbackStateProvider.select((state) => state.valueOrNull?.isPlaying),
@@ -149,12 +147,13 @@ class _SongList extends ConsumerWidget {
           itemCount: songs.length,
           itemBuilder: (context, index) {
             final song = songs[index];
-            return _SongArtwork(
-              albumId: song.albumId,
-              builder: (artwork) => TakiSongTile(
+            return AlbumArtworkBuilder.reference(
+              reference: song.artwork,
+              size: TakiSongTile.artworkSize,
+              builder: (_, artwork) => TakiSongTile(
                 song: song,
                 artwork: artwork,
-                playback: song.id != currentSongId
+                playback: song.musicIdentity != currentIdentity
                     ? TakiNowPlaying.none
                     : isPlaying
                         ? TakiNowPlaying.playing
@@ -212,73 +211,6 @@ class _LibraryHeader extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Resuelve la carátula de una fila con [ArtworkCache] (bytes →
-/// `MemoryImage`), la misma fuente que usaba `SongTile`.
-class _SongArtwork extends ConsumerStatefulWidget {
-  const _SongArtwork({required this.albumId, required this.builder});
-
-  final int? albumId;
-  final Widget Function(ImageProvider? artwork) builder;
-
-  @override
-  ConsumerState<_SongArtwork> createState() => _SongArtworkState();
-}
-
-class _SongArtworkState extends ConsumerState<_SongArtwork> {
-  ArtworkKey? _key;
-  Uint8List? _bytes;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(_SongArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.albumId != widget.albumId) _resolve();
-  }
-
-  void _resolve() {
-    final albumId = widget.albumId;
-    if (albumId == null) {
-      _key = null;
-      _bytes = null;
-      return;
-    }
-
-    final key = (
-      albumId: albumId,
-      size: (TakiSongTile.artworkSize * MediaQuery.devicePixelRatioOf(context))
-          .round(),
-    );
-    if (key == _key) return;
-    _key = key;
-
-    final cache = ref.read(artworkCacheProvider);
-    if (cache.contains(key)) {
-      _bytes = cache.peek(key);
-      return;
-    }
-
-    _bytes = null;
-    cache.load(key).then((bytes) {
-      if (mounted && _key == key) setState(() => _bytes = bytes);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bytes = _bytes;
-    // Los bytes son la clave del MemoryImage: tras un reescaneo llegan bytes
-    // nuevos y la imagen se actualiza.
-    return widget.builder(
-      bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
     );
   }
 }

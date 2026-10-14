@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/app.dart';
 import 'package:taki/features/library/domain/entities/favorite_entry.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
 
 import '../helpers/favorites_fakes.dart';
 import '../helpers/library_fakes.dart';
@@ -18,7 +19,7 @@ void main() {
     final song = buildSong(id: 50, title: 'Reencontrada');
     final favorites = FakeFavoritesRepository()
       ..seed(FavoriteEntry(
-        songId: 5,
+        musicIdentity: localMusicIdentity(5),
         addedAt: DateTime(2026, 9, 1),
         title: 'Reencontrada',
         path: song.path,
@@ -43,7 +44,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(favorites.relinks, [(5, 50)]);
+    expect(favorites.relinks, [(localMusicIdentity(5), localMusicIdentity(50))]);
 
     // Abrir Reproduciendo desde el mini player: el corazón ya está marcado.
     await tester.tap(

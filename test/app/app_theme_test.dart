@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/app/app.dart';
 import 'package:taki/app/theme/app_theme.dart';
-import 'package:taki/core/theme/app_colors.dart';
 import 'package:taki/core/theme/taki_colors.dart';
 import 'package:taki/core/theme/taki_radius.dart';
 import 'package:taki/core/theme/taki_typography.dart';
@@ -12,20 +11,6 @@ import '../helpers/library_fakes.dart';
 
 void main() {
   final theme = AppTheme.dark();
-
-  test('AppColors es un alias de la paleta Taki (§22 paso 1)', () {
-    expect(AppColors.background, TakiColors.background);
-    expect(AppColors.surface, TakiColors.surface);
-    expect(AppColors.surfaceElevated, TakiColors.surfaceElevated);
-    expect(AppColors.border, TakiColors.outline);
-    expect(AppColors.textPrimary, TakiColors.textPrimary);
-    expect(AppColors.textSecondary, TakiColors.textSecondary);
-    expect(AppColors.accent, TakiColors.primary);
-    expect(AppColors.onAccent, TakiColors.onPrimary);
-    expect(AppColors.onTextPrimary, TakiColors.onTextPrimary);
-    expect(AppColors.miniProgressTrack, TakiColors.divider);
-    expect(AppColors.seekTrack, TakiColors.divider);
-  });
 
   group('superficies (§5)', () {
     test('fondo nivel 0; contenedores por luminosidad', () {

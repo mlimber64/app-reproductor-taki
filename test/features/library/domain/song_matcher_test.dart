@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/features/library/domain/entities/favorite_entry.dart';
 import 'package:taki/core/domain/services/song_matcher.dart';
 import 'package:taki/features/playlists/domain/entities/playlist_entry.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
 
 import '../../../helpers/library_fakes.dart';
 
@@ -22,7 +23,7 @@ void main() {
     String? path,
   }) {
     return FavoriteEntry(
-      songId: songId,
+      musicIdentity: localMusicIdentity(songId),
       addedAt: DateTime(2026),
       title: title,
       artist: artist,
@@ -66,11 +67,11 @@ void main() {
   });
 
   test('funciona igual con entradas de playlist', () {
-    const entry = PlaylistEntry(
+    final entry = PlaylistEntry(
       id: 1,
       playlistId: 1,
       position: 0,
-      songId: 99,
+      musicIdentity: localMusicIdentity(99),
       title: 'Mi Canción',
       artist: 'Mi Artista',
       durationMs: 200000,

@@ -3,6 +3,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:taki/features/library/domain/usecases/favorites_usecases.dart';
 import 'package:taki/features/library/domain/usecases/get_songs.dart';
 import 'package:taki/features/playlists/domain/usecases/playlist_usecases.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
 
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
@@ -37,10 +38,10 @@ void main() {
       ..seed(favorites.entryFor(song))
       ..seed(favorites.entryFor(voiceNote));
 
-    final visible = await GetFavoriteSongs(favorites)([song]);
+    final visible = await GetFavoriteSongs(favorites, localLookupOver([song]))([song]);
 
     expect(visible, [song]);
-    expect(favorites.entries.keys, containsAll([1, 2]));
+    expect(favorites.entries.keys, containsAll([localMusicIdentity(1), localMusicIdentity(2)]));
     expect(favorites.relinks, isEmpty);
   });
 
@@ -49,10 +50,10 @@ void main() {
     final playlists = FakePlaylistsRepository();
     final id = playlists.seed('Mix', songs: [voiceNote, song]);
 
-    final items = await GetPlaylistSongs(playlists)(id, [song]);
+    final items = await GetPlaylistSongs(playlists, localLookupOver([song]))(id, [song]);
 
     expect(items.map((i) => i.song), [song]);
-    expect(playlists.entriesOf(id).map((e) => e.songId), [2, 1]);
+    expect(playlists.entriesOf(id).map((e) => e.musicIdentity), [localMusicIdentity(2), localMusicIdentity(1)]);
     expect(playlists.relinks, isEmpty);
   });
 }

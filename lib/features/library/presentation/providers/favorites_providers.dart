@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/lookup/song_lookup_providers.dart';
 import '../../../../core/database/taki_database_provider.dart';
+import '../../../../core/domain/entities/music_identity.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../domain/ports/favorites_repository.dart';
 import '../../domain/usecases/favorites_usecases.dart';
@@ -15,17 +17,17 @@ final favoritesRepositoryProvider = Provider<FavoritesRepository>((ref) {
   return repository;
 });
 
-/// Ids favoritos; se actualiza al instante tras cada cambio.
-final favoriteIdsProvider = StreamProvider<Set<int>>(
-  (ref) => ref.watch(favoritesRepositoryProvider).watchFavoriteIds(),
+/// Identidades favoritas; se actualiza al instante tras cada cambio.
+final favoriteIdentitiesProvider = StreamProvider<Set<MusicIdentity>>(
+  (ref) => ref.watch(favoritesRepositoryProvider).watchFavoriteIdentities(),
 );
 
-/// Si la canción [songId] es favorita. Solo reconstruye a quien la observa
-/// cuando cambia esa canción.
-final isFavoriteProvider = Provider.family<bool, int>(
-  (ref, songId) => ref.watch(
-    favoriteIdsProvider.select(
-      (ids) => ids.valueOrNull?.contains(songId) ?? false,
+/// Si la canción con esa [identity] es favorita. Solo reconstruye a quien la
+/// observa cuando cambia esa canción.
+final isFavoriteProvider = Provider.family<bool, MusicIdentity>(
+  (ref, identity) => ref.watch(
+    favoriteIdentitiesProvider.select(
+      (identities) => identities.valueOrNull?.contains(identity) ?? false,
     ),
   ),
 );
@@ -35,15 +37,19 @@ final toggleFavoriteProvider = Provider<ToggleFavorite>(
 );
 
 final getFavoriteSongsProvider = Provider<GetFavoriteSongs>(
-  (ref) => GetFavoriteSongs(ref.watch(favoritesRepositoryProvider)),
+  (ref) => GetFavoriteSongs(
+    ref.watch(favoritesRepositoryProvider),
+    ref.watch(songLookupProvider),
+  ),
 );
 
 /// Canciones favoritas presentes en la biblioteca, las más recientes primero.
 /// Se recalcula cuando cambian los favoritos o la biblioteca.
 final favoriteSongsProvider = FutureProvider<List<Song>>((ref) async {
-  await ref.watch(favoriteIdsProvider.future);
-  final library = await ref.watch(songsProvider.future);
-  final songs = library is LibraryLoaded ? library.songs : const <Song>[];
+  await ref.watch(favoriteIdentitiesProvider.future);
+  // La biblioteca local solo sirve al reencuentro de canciones locales: su
+  // estado (sin permiso, error) no bloquea la resolución de otras fuentes.
+  final songs = await localLibrarySongs(ref);
   return ref.read(getFavoriteSongsProvider).call(songs);
 });
 
@@ -51,7 +57,7 @@ final favoriteSongsProvider = FutureProvider<List<Song>>((ref) async {
 /// si la biblioteca también falló, la vuelve a escanear.
 void retryFavorites(WidgetRef ref) {
   ref.invalidate(takiDatabaseProvider);
-  ref.invalidate(favoriteIdsProvider);
+  ref.invalidate(favoriteIdentitiesProvider);
   if (ref.read(songsProvider).hasError) {
     ref.read(songsProvider.notifier).retry();
   }

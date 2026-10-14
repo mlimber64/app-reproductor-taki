@@ -1,14 +1,16 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/domain/entities/music_identity.dart';
 import '../../../../core/domain/entities/song_reference.dart';
 
 /// Canción marcada como favorita, tal como se guardó.
 ///
-/// Además del id guarda una copia de respaldo de sus datos, para reconocerla
-/// si el id cambia (reescaneo de MediaStore, reinstalación…).
+/// Se identifica por [musicIdentity] (fuente + id externo). Además guarda una
+/// copia de respaldo de sus datos, para reconocerla si hiciera falta (p. ej.
+/// si el id de MediaStore cambia tras un reescaneo o una reinstalación).
 class FavoriteEntry extends Equatable implements SongReference {
   const FavoriteEntry({
-    required this.songId,
+    required this.musicIdentity,
     required this.addedAt,
     this.title,
     this.artist,
@@ -18,7 +20,7 @@ class FavoriteEntry extends Equatable implements SongReference {
   });
 
   @override
-  final int songId;
+  final MusicIdentity musicIdentity;
   final DateTime addedAt;
   @override
   final String? title;
@@ -32,5 +34,5 @@ class FavoriteEntry extends Equatable implements SongReference {
 
   @override
   List<Object?> get props =>
-      [songId, addedAt, title, artist, album, durationMs, path];
+      [musicIdentity, addedAt, title, artist, album, durationMs, path];
 }

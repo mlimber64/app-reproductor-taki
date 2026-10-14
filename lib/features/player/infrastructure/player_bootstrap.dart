@@ -2,6 +2,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 
 import '../../../core/domain/ports/artwork_repository.dart';
+import '../../../core/domain/ports/playback_resolver.dart';
+import '../../../core/domain/ports/remote_artwork_loader.dart';
 import 'artwork_file_cache.dart';
 import 'just_audio_player_adapter.dart';
 import 'taki_audio_handler.dart';
@@ -19,15 +21,19 @@ typedef PlayerBootstrap = ({
 /// otras apps (y reanuda si la interrupción era temporal), deja que Android
 /// baje el volumen cuando corresponde (ducking) y pausa al desconectar los
 /// auriculares.
-Future<PlayerBootstrap> initPlayer({required ArtworkRepository artwork}) async {
+Future<PlayerBootstrap> initPlayer({
+  required ArtworkRepository artwork,
+  PlaybackResolver? resolver,
+  RemoteArtworkLoader? remoteArtworkLoader,
+}) async {
   final session = await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());
 
-  final player = JustAudioPlayerAdapter();
+  final player = JustAudioPlayerAdapter(resolver: resolver);
   final handler = await AudioService.init(
     builder: () => TakiAudioHandler(
       player,
-      ArtworkFileCache(artwork),
+      ArtworkFileCache(artwork, remoteArtworkLoader: remoteArtworkLoader),
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.limbermendoza.taki.playback',

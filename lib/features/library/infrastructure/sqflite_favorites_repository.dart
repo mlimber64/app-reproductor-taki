@@ -1,17 +1,21 @@
 import 'dart:async';
 
+import '../../../core/domain/entities/local_song.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/taki_database.dart';
+import '../../../core/domain/entities/music_identity.dart';
 import '../../../core/domain/entities/song.dart';
 import '../domain/entities/favorite_entry.dart';
 import '../domain/ports/favorites_repository.dart';
 
 /// [FavoritesRepository] sobre la tabla `favorites` de `taki.db`.
 ///
+/// - Cada favorito se identifica por `source` + `external_id` (la
+///   [MusicIdentity], tal cual, sin normalizar).
 /// - Las escrituras se serializan (una detrás de otra).
-/// - [watchFavoriteIds] vuelve a consultar tras cada escritura, avisado por un
-///   StreamController interno: sin polling.
+/// - [watchFavoriteIdentities] vuelve a consultar tras cada escritura, avisado
+///   por un StreamController interno: sin polling.
 /// - La base se pide con [_database] en cada operación; si no se pudo abrir,
 ///   cada operación falla con ese error y la UI lo muestra.
 class SqfliteFavoritesRepository implements FavoritesRepository {
@@ -21,6 +25,7 @@ class SqfliteFavoritesRepository implements FavoritesRepository {
   }) : _clock = clock ?? DateTime.now;
 
   static const String _table = TakiDatabase.favoritesTable;
+  static const String _byIdentity = 'source = ? AND external_id = ?';
 
   final Future<Database> Function() _database;
   final DateTime Function() _clock;
@@ -28,20 +33,20 @@ class SqfliteFavoritesRepository implements FavoritesRepository {
   Future<void> _pendingWrite = Future.value();
 
   @override
-  Stream<Set<int>> watchFavoriteIds() {
+  Stream<Set<MusicIdentity>> watchFavoriteIdentities() {
     StreamSubscription<void>? subscription;
-    late final StreamController<Set<int>> controller;
+    late final StreamController<Set<MusicIdentity>> controller;
 
     Future<void> emit() async {
       try {
-        final ids = await _favoriteIds();
-        if (!controller.isClosed) controller.add(ids);
+        final identities = await _favoriteIdentities();
+        if (!controller.isClosed) controller.add(identities);
       } catch (error, stackTrace) {
         if (!controller.isClosed) controller.addError(error, stackTrace);
       }
     }
 
-    controller = StreamController<Set<int>>(
+    controller = StreamController<Set<MusicIdentity>>(
       onListen: () {
         subscription = _changes.stream.listen((_) => emit());
         emit();
@@ -66,7 +71,7 @@ class SqfliteFavoritesRepository implements FavoritesRepository {
     return _write((db) => db.insert(
           _table,
           {
-            'song_id': song.id,
+            ..._identity(song.musicIdentity),
             'added_at': _clock().millisecondsSinceEpoch,
             ..._backup(song),
           },
@@ -76,36 +81,41 @@ class SqfliteFavoritesRepository implements FavoritesRepository {
   }
 
   @override
-  Future<void> remove(int songId) {
+  Future<void> remove(MusicIdentity identity) {
     return _write(
-      (db) => db.delete(_table, where: 'song_id = ?', whereArgs: [songId]),
+      (db) => db.delete(
+        _table,
+        where: _byIdentity,
+        whereArgs: [identity.source, identity.externalId],
+      ),
     );
   }
 
   @override
-  Future<void> relink(int oldSongId, Song song) {
-    if (oldSongId == song.id) return Future.value();
+  Future<void> relink(MusicIdentity oldIdentity, Song song) {
+    final identity = song.musicIdentity;
+    if (oldIdentity == identity) return Future.value();
     return _write((db) => db.transaction<void>((txn) async {
           final existing = await txn.query(
             _table,
-            columns: ['song_id'],
-            where: 'song_id = ?',
-            whereArgs: [song.id],
+            columns: ['source'],
+            where: _byIdentity,
+            whereArgs: [identity.source, identity.externalId],
           );
           if (existing.isNotEmpty) {
-            // El id nuevo ya es favorito: sobra el registro viejo.
+            // La identidad nueva ya es favorita: sobra el registro viejo.
             await txn.delete(
               _table,
-              where: 'song_id = ?',
-              whereArgs: [oldSongId],
+              where: _byIdentity,
+              whereArgs: [oldIdentity.source, oldIdentity.externalId],
             );
             return;
           }
           await txn.update(
             _table,
-            {'song_id': song.id, ..._backup(song)},
-            where: 'song_id = ?',
-            whereArgs: [oldSongId],
+            {..._identity(identity), ..._backup(song)},
+            where: _byIdentity,
+            whereArgs: [oldIdentity.source, oldIdentity.externalId],
           );
         }));
   }
@@ -121,23 +131,31 @@ class SqfliteFavoritesRepository implements FavoritesRepository {
     return result;
   }
 
-  Future<Set<int>> _favoriteIds() async {
+  Future<Set<MusicIdentity>> _favoriteIdentities() async {
     final db = await _database();
-    final rows = await db.query(_table, columns: ['song_id']);
-    return {for (final row in rows) row['song_id']! as int};
+    final rows = await db.query(_table, columns: ['source', 'external_id']);
+    return {for (final row in rows) _toIdentity(row)};
   }
+
+  static Map<String, Object?> _identity(MusicIdentity identity) => {
+        'source': identity.source,
+        'external_id': identity.externalId,
+      };
+
+  static MusicIdentity _toIdentity(Map<String, Object?> row) =>
+      MusicIdentity(row['source']! as String, row['external_id']! as String);
 
   static Map<String, Object?> _backup(Song song) => {
         'title': song.title,
         'artist': song.artist,
         'album': song.album,
         'duration_ms': song.durationMs,
-        'path': song.path,
+        'path': localPathOf(song),
       };
 
   static FavoriteEntry _toEntry(Map<String, Object?> row) {
     return FavoriteEntry(
-      songId: row['song_id']! as int,
+      musicIdentity: _toIdentity(row),
       addedAt: DateTime.fromMillisecondsSinceEpoch(row['added_at']! as int),
       title: row['title'] as String?,
       artist: row['artist'] as String?,

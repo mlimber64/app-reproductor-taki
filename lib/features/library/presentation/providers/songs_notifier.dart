@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/artwork/artwork_providers.dart';
-import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/entities/local_song.dart';
 import 'library_providers.dart';
 
 /// Estados de la biblioteca. "Cargando" y "error" los cubre [AsyncValue].
@@ -29,7 +29,7 @@ final class LibraryEmpty extends LibraryState {
 final class LibraryLoaded extends LibraryState {
   const LibraryLoaded(this.songs);
 
-  final List<Song> songs;
+  final List<LocalSong> songs;
 
   Duration get totalDuration => songs.fold(
         Duration.zero,
@@ -43,6 +43,19 @@ final class LibraryLoaded extends LibraryState {
 final songsProvider = AsyncNotifierProvider<SongsNotifier, LibraryState>(
   SongsNotifier.new,
 );
+
+/// Canciones de la biblioteca local **sin que su estado afecte a las demás
+/// fuentes**: sin permiso, vacía o con error de lectura → lista vacía (nunca
+/// lanza). Observa [songsProvider], así que quien la usa se recalcula cuando la
+/// biblioteca cambia. Es solo para el reencuentro local de favoritos/playlists.
+Future<List<LocalSong>> localLibrarySongs(Ref ref) async {
+  try {
+    final library = await ref.watch(songsProvider.future);
+    return library is LibraryLoaded ? library.songs : const <LocalSong>[];
+  } catch (_) {
+    return const <LocalSong>[];
+  }
+}
 
 class SongsNotifier extends AsyncNotifier<LibraryState> {
   @override

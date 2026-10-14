@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:taki/core/domain/entities/local_song.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:taki/core/domain/entities/music_identity.dart';
 import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/playlists/domain/entities/playlist.dart';
 import 'package:taki/features/playlists/domain/entities/playlist_entry.dart';
@@ -17,7 +19,7 @@ class FakePlaylistsRepository implements PlaylistsRepository {
 
   bool failing;
   final List<_FakePlaylist> _playlists = [];
-  final List<(int, int)> relinks = [];
+  final List<(int, MusicIdentity)> relinks = [];
   final _changes = StreamController<void>.broadcast();
   var _nextId = 1;
   var _nextEntryId = 1;
@@ -155,7 +157,7 @@ class FakePlaylistsRepository implements PlaylistsRepository {
   @override
   Future<void> relink(int entryId, Song song) async {
     _check();
-    relinks.add((entryId, song.id));
+    relinks.add((entryId, song.musicIdentity));
     for (final playlist in _playlists) {
       final index = playlist.entries.indexWhere((e) => e.id == entryId);
       if (index == -1) continue;
@@ -182,12 +184,12 @@ class FakePlaylistsRepository implements PlaylistsRepository {
       id: id ?? _nextEntryId++,
       playlistId: playlistId,
       position: position,
-      songId: song.id,
+      musicIdentity: song.musicIdentity,
       title: song.title,
       artist: song.artist,
       album: song.album,
       durationMs: song.durationMs,
-      path: song.path,
+      path: localPathOf(song),
     );
   }
 
@@ -199,7 +201,7 @@ class FakePlaylistsRepository implements PlaylistsRepository {
         id: e.id,
         playlistId: e.playlistId,
         position: i,
-        songId: e.songId,
+        musicIdentity: e.musicIdentity,
         title: e.title,
         artist: e.artist,
         album: e.album,
@@ -220,7 +222,7 @@ class FakePlaylistsRepository implements PlaylistsRepository {
               p.entries.fold(0, (sum, e) => sum + (e.durationMs ?? 0)),
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
-          coverSongIds: [for (final e in p.entries.take(4)) e.songId],
+          coverIdentities: [for (final e in p.entries.take(4)) e.musicIdentity],
         ),
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return list;

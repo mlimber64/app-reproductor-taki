@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taki/features/library/infrastructure/media_store_song_repository.dart';
 
@@ -43,14 +44,11 @@ void main() {
     expect(song.artist, 'Artista');
     expect(song.album, 'Álbum');
     expect(song.albumId, 7);
+    expect(song.artwork, const LocalArtworkReference(7));
     expect(song.durationMs, 215000);
     expect(song.path, '/storage/emulated/0/Music/cancion.mp3');
     expect(song.contentUri, 'content://media/external/audio/media/42');
     expect(song.folder, 'Music/');
-    expect(
-      song.dateAdded,
-      DateTime.fromMillisecondsSinceEpoch(1767225600 * 1000),
-    );
   });
 
   test('normaliza valores desconocidos y título vacío', () async {
@@ -75,8 +73,8 @@ void main() {
     expect(song.artist, isNull);
     expect(song.album, isNull);
     expect(song.albumId, isNull);
+    expect(song.artwork, const UnavailableArtworkReference());
     expect(song.durationMs, 0);
-    expect(song.dateAdded, isNull);
     expect(song.folder, '', reason: 'sin carpeta de la fuente');
   });
 }

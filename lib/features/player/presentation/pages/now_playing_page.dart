@@ -1,11 +1,10 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/artwork/artwork_cache.dart';
-import '../../../../core/artwork/artwork_providers.dart';
+import '../../../../core/artwork/album_artwork_builder.dart';
+import '../../../../core/domain/entities/artwork_reference.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_icon_size.dart';
@@ -19,6 +18,7 @@ import '../../../../core/widgets/taki_progress_bar.dart';
 import '../../../library/presentation/providers/favorites_providers.dart';
 import '../../domain/entities/playback_state.dart';
 import '../providers/player_providers.dart';
+import '../widgets/attribution_section.dart';
 
 /// Pantalla completa de la canción que suena.
 ///
@@ -152,6 +152,8 @@ class _PortraitLayout extends StatelessWidget {
       const _Controls(),
       const SizedBox(height: TakiSpacing.xl),
       _BottomActions(onOpenQueue: onOpenQueue),
+      // Secundaria: no ocupa nada si no hay atribución.
+      AttributionSection(song: song),
       const SizedBox(height: TakiSpacing.lg),
     ];
 
@@ -162,7 +164,7 @@ class _PortraitLayout extends StatelessWidget {
             _TopBar(onClose: onClose),
             const SizedBox(height: TakiSpacing.lg),
             _Artwork(
-              albumId: song.albumId,
+              artwork: song.artwork,
               size: math.min(constraints.maxWidth, _scrollArtworkSize),
             ),
             ...bottom,
@@ -179,7 +181,7 @@ class _PortraitLayout extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, box) => Center(
               child: _Artwork(
-                albumId: song.albumId,
+                artwork: song.artwork,
                 size: math.min(box.maxWidth, box.maxHeight),
               ),
             ),
@@ -216,7 +218,7 @@ class _LandscapeLayout extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, box) => Center(
                     child: _Artwork(
-                      albumId: song.albumId,
+                      artwork: song.artwork,
                       size: math.min(box.maxWidth, box.maxHeight),
                     ),
                   ),
@@ -238,6 +240,7 @@ class _LandscapeLayout extends StatelessWidget {
                         const _Controls(),
                         const SizedBox(height: TakiSpacing.sm),
                         _BottomActions(onOpenQueue: onOpenQueue),
+                        AttributionSection(song: song),
                       ],
                     );
                     return Center(
@@ -343,75 +346,23 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Carátula grande (§11): `TakiArtwork` hero, con la misma fuente que el
-/// resto de la app (bytes de [ArtworkCache]).
-class _Artwork extends ConsumerStatefulWidget {
-  const _Artwork({required this.albumId, required this.size});
+/// Carátula grande (§11): `TakiArtwork` hero. La imagen la resuelve
+/// [AlbumArtworkBuilder] (caché de carátulas → `ResizeImage(MemoryImage)`).
+class _Artwork extends StatelessWidget {
+  const _Artwork({required this.artwork, required this.size});
 
-  final int? albumId;
+  final ArtworkReference artwork;
   final double size;
 
   @override
-  ConsumerState<_Artwork> createState() => _ArtworkState();
-}
-
-class _ArtworkState extends ConsumerState<_Artwork> {
-  ArtworkKey? _key;
-  Uint8List? _bytes;
-
-  /// Tamaño entero: evita pedir la carátula de nuevo por fracciones de píxel.
-  double get _side => math.max(0.0, widget.size.floorToDouble());
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(_Artwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.albumId != widget.albumId || oldWidget.size != widget.size) {
-      _resolve();
-    }
-  }
-
-  void _resolve() {
-    final albumId = widget.albumId;
-    if (albumId == null) {
-      _key = null;
-      _bytes = null;
-      return;
-    }
-
-    final key = (
-      albumId: albumId,
-      size: (_side * MediaQuery.devicePixelRatioOf(context)).round(),
-    );
-    if (key == _key) return;
-    _key = key;
-
-    final cache = ref.read(artworkCacheProvider);
-    if (cache.contains(key)) {
-      _bytes = cache.peek(key);
-      return;
-    }
-
-    _bytes = null;
-    cache.load(key).then((bytes) {
-      if (mounted && _key == key) setState(() => _bytes = bytes);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final bytes = _bytes;
-    return TakiArtwork(
-      size: _side,
-      hero: true,
-      // Los bytes son la clave del MemoryImage: tras un reescaneo llegan
-      // bytes nuevos y la imagen se actualiza.
-      image: bytes == null || bytes.isEmpty ? null : MemoryImage(bytes),
+    // Tamaño entero: evita pedir la carátula de nuevo por fracciones de píxel;
+    // el mismo lado se pide y se dibuja.
+    final side = math.max(0.0, size.floorToDouble());
+    return AlbumArtworkBuilder.reference(
+      reference: artwork,
+      size: side,
+      builder: (_, image) => TakiArtwork(size: side, hero: true, image: image),
     );
   }
 }
@@ -479,7 +430,7 @@ class _FavoriteButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isFavorite = ref.watch(isFavoriteProvider(song.id));
+    final isFavorite = ref.watch(isFavoriteProvider(song.musicIdentity));
 
     // Marcado: corazón relleno **y** naranja; se anuncia como interruptor.
     return TakiIconButton(

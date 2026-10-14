@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/artwork/artwork_cache.dart';
-import '../../../../core/artwork/artwork_providers.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/domain/entities/artwork_reference.dart';
+import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/theme/taki_spacing.dart';
 import '../../../../core/utils/duration_format.dart';
 import '../../../../core/widgets/taki_button.dart';
@@ -13,6 +11,8 @@ import '../../../../core/widgets/taki_error_state.dart';
 import '../../../../core/widgets/taki_playlist_card.dart';
 import '../../../../core/widgets/taki_section_header.dart';
 import '../../domain/entities/playlist.dart';
+import '../playlist_cover_albums.dart';
+import '../playlist_cover_images.dart';
 import '../providers/playlists_providers.dart';
 import '../widgets/delete_playlist_dialog.dart';
 import '../widgets/playlist_name_dialog.dart';
@@ -47,7 +47,7 @@ class PlaylistsPage extends ConsumerWidget {
   ) async {
     final action = await showModalBottomSheet<_PlaylistAction>(
       context: context,
-      backgroundColor: AppColors.surfaceElevated,
+      backgroundColor: TakiColors.surfaceElevated,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: Column(
@@ -107,7 +107,7 @@ class PlaylistsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistsProvider);
-    final albumIds = ref.watch(libraryAlbumIdsProvider);
+    final libraryArtwork = ref.watch(playlistCoverArtworkProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text(title)),
@@ -158,7 +158,12 @@ class PlaylistsPage extends ConsumerWidget {
             final playlist = list[index - 2];
             return _PlaylistRow(
               playlist: playlist,
-              albumIds: _coverAlbums(playlist, albumIds),
+              // Las primeras 4 entradas guardadas (las ausentes de la
+              // biblioteca entran como null) → carátulas de la portada.
+              coverArtwork: playlistCoverArtwork([
+                for (final identity in playlist.coverIdentities)
+                  libraryArtwork[identity],
+              ]),
               onTap: () => onOpenPlaylist(playlist.id),
               onLongPress: () => _showActions(context, ref, playlist),
             );
@@ -166,14 +171,6 @@ class PlaylistsPage extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  /// Álbumes distintos de las primeras canciones, en orden (hasta 4): con 4,
-  /// mosaico; con menos, la primera carátula.
-  static List<int> _coverAlbums(Playlist playlist, Map<int, int?> albumIds) {
-    return <int>{
-      for (final songId in playlist.coverSongIds) ?albumIds[songId],
-    }.take(4).toList();
   }
 }
 
@@ -207,30 +204,31 @@ class _NewPlaylistButton extends StatelessWidget {
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
     required this.playlist,
-    required this.albumIds,
+    required this.coverArtwork,
     required this.onTap,
     required this.onLongPress,
   });
 
   final Playlist playlist;
-  final List<int> albumIds;
+
+  /// Carátulas de la portada ya elegidas ([playlistCoverArtwork]): `[]` sin
+  /// canciones (placeholder con borde), `[Unavailable]` con canciones pero sin
+  /// carátulas (una pieza sin imagen).
+  final List<ArtworkReference> coverArtwork;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = playlist.songCount == 0;
-
     return MergeSemantics(
       child: Semantics(
         onLongPressHint: 'Renombrar o eliminar',
-        child: _PlaylistArtwork(
-          // Vacía: sin imágenes (placeholder con borde). Con canciones pero
-          // sin carátulas: una pieza sin imagen.
-          albumIds: isEmpty ? const [] : albumIds,
+        child: PlaylistCoverImages(
+          artwork: coverArtwork,
+          size: TakiPlaylistCard.artworkSize,
           builder: (images) => TakiPlaylistCard(
             title: playlist.name,
-            artwork: isEmpty || images.isNotEmpty ? images : const [null],
+            artwork: images,
             subtitle: formatSongsSummary(
               playlist.songCount,
               playlist.totalDuration,
@@ -241,72 +239,5 @@ class _PlaylistRow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Resuelve las carátulas de la portada con [ArtworkCache] (bytes →
-/// `MemoryImage`), como la Biblioteca y Favoritos (adaptador repetido: ver
-/// docs/DESIGN_SYSTEM.md, Fase 1.7C-1).
-class _PlaylistArtwork extends ConsumerStatefulWidget {
-  const _PlaylistArtwork({required this.albumIds, required this.builder});
-
-  final List<int> albumIds;
-  final Widget Function(List<ImageProvider?> images) builder;
-
-  @override
-  ConsumerState<_PlaylistArtwork> createState() => _PlaylistArtworkState();
-}
-
-class _PlaylistArtworkState extends ConsumerState<_PlaylistArtwork> {
-  List<ArtworkKey> _keys = const [];
-  final Map<ArtworkKey, Uint8List?> _bytes = {};
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _resolve();
-  }
-
-  @override
-  void didUpdateWidget(_PlaylistArtwork oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!listEquals(oldWidget.albumIds, widget.albumIds)) _resolve();
-  }
-
-  void _resolve() {
-    final size =
-        (TakiPlaylistCard.artworkSize * MediaQuery.devicePixelRatioOf(context))
-            .round();
-    final keys = [
-      for (final albumId in widget.albumIds) (albumId: albumId, size: size),
-    ];
-    if (listEquals(keys, _keys)) return;
-    _keys = keys;
-    _bytes.removeWhere((key, _) => !keys.contains(key));
-
-    final cache = ref.read(artworkCacheProvider);
-    for (final key in keys) {
-      if (_bytes.containsKey(key)) continue;
-      if (cache.contains(key)) {
-        _bytes[key] = cache.peek(key);
-        continue;
-      }
-      cache.load(key).then((bytes) {
-        if (mounted && _keys.contains(key)) {
-          setState(() => _bytes[key] = bytes);
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.builder([
-      for (final key in _keys)
-        switch (_bytes[key]) {
-          final bytes? when bytes.isNotEmpty => MemoryImage(bytes),
-          _ => null,
-        },
-    ]);
   }
 }

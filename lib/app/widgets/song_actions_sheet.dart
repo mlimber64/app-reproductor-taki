@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/domain/entities/song.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/taki_colors.dart';
 import '../../core/widgets/song_actions.dart';
 import '../../features/library/presentation/providers/favorites_providers.dart';
 import '../../features/player/presentation/providers/player_providers.dart';
@@ -26,7 +26,7 @@ Future<void> showSongActions(
 }) async {
   final choice = await showModalBottomSheet<Object>(
     context: context,
-    backgroundColor: AppColors.surfaceElevated,
+    backgroundColor: TakiColors.surfaceElevated,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) =>
@@ -86,7 +86,7 @@ class SongActionsSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
-    final isFavorite = ref.watch(isFavoriteProvider(song.id));
+    final isFavorite = ref.watch(isFavoriteProvider(song.musicIdentity));
 
     return SafeArea(
       child: SingleChildScrollView(

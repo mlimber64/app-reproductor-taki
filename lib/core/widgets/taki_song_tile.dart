@@ -48,7 +48,7 @@ class TakiSongTile extends StatelessWidget {
 
   final Song song;
 
-  /// Carátula (p. ej. `AlbumArtworkImage`); sin ella, placeholder.
+  /// Carátula (p. ej. la de `AlbumArtworkBuilder`); sin ella, placeholder.
   final ImageProvider? artwork;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;

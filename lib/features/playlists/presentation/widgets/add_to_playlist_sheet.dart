@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/domain/entities/song.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/taki_colors.dart';
 import '../../../../core/utils/duration_format.dart';
+import '../../../../core/widgets/taki_artwork.dart';
 import '../../domain/entities/playlist.dart';
+import '../playlist_cover_albums.dart';
+import '../playlist_cover_images.dart';
 import '../providers/playlists_providers.dart';
-import 'playlist_cover.dart';
 import 'playlist_name_dialog.dart';
 
 /// Elige una playlist (o crea una nueva) y le añade [songs]. Confirma con un
@@ -18,7 +20,7 @@ Future<void> addSongsToPlaylistFlow(
 ) async {
   final choice = await showModalBottomSheet<_PlaylistChoice>(
     context: context,
-    backgroundColor: AppColors.surfaceElevated,
+    backgroundColor: TakiColors.surfaceElevated,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) => const _PlaylistPickerSheet(),
@@ -72,13 +74,16 @@ final class _ExistingPlaylist extends _PlaylistChoice {
   final Playlist playlist;
 }
 
+/// Lado lógico de la portada de cada playlist del selector.
+const double _coverSize = 44;
+
 class _PlaylistPickerSheet extends ConsumerWidget {
   const _PlaylistPickerSheet();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistsProvider);
-    final albumIds = ref.watch(libraryAlbumIdsProvider);
+    final libraryArtwork = ref.watch(playlistCoverArtworkProvider);
     final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
 
     return SafeArea(
@@ -110,13 +115,18 @@ class _PlaylistPickerSheet extends ConsumerWidget {
                       final playlist = value[index];
                       return ListTile(
                         minTileHeight: 64,
-                        leading: PlaylistCover(
-                          albumIds: [
-                            for (final id in playlist.coverSongIds)
-                              albumIds[id],
-                          ],
-                          isEmpty: playlist.songCount == 0,
-                          size: 44,
+                        // Las primeras 4 entradas guardadas (las ausentes de la
+                        // biblioteca entran como null), como la lista.
+                        leading: PlaylistCoverImages(
+                          artwork: playlistCoverArtwork([
+                            for (final id in playlist.coverIdentities)
+                              libraryArtwork[id],
+                          ]),
+                          size: _coverSize,
+                          builder: (images) => TakiArtwork.mosaic(
+                            size: _coverSize,
+                            images: images,
+                          ),
                         ),
                         title: Text(
                           playlist.name,

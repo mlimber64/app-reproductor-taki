@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 
+import '../../../core/domain/entities/music_identity.dart';
 import '../../../core/domain/entities/song.dart';
 import '../domain/entities/playback_state.dart' as player;
 import '../domain/ports/audio_player_port.dart';
@@ -136,9 +137,19 @@ class TakiAudioHandler extends BaseAudioHandler {
     }
   }
 
+  /// Id del [MediaItem] para [identity]: identifica **la canción**, no su
+  /// recurso reproducible (la URI se resuelve aparte, con `PlaybackResolver`).
+  ///
+  /// Es un id opaco para audio_service, no un formato de serialización: cada
+  /// parte se codifica como componente de URI, así que `/` no puede aparecer
+  /// dentro de ellas y dos identidades distintas nunca dan el mismo id.
+  static String mediaIdFor(MusicIdentity identity) =>
+      '${Uri.encodeComponent(identity.source)}/'
+      '${Uri.encodeComponent(identity.externalId)}';
+
   static MediaItem _toMediaItem(Song song) {
     return MediaItem(
-      id: song.contentUri,
+      id: mediaIdFor(song.musicIdentity),
       title: song.title,
       artist: song.artist,
       album: song.album,

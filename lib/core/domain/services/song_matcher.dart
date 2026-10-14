@@ -1,18 +1,22 @@
-import '../entities/song.dart';
+import '../entities/music_identity.dart';
+import '../entities/local_song.dart';
 import '../entities/song_reference.dart';
 
 /// Reencuentra canciones guardadas (favoritos, playlists…) en la biblioteca
 /// escaneada.
 ///
-/// Orden de búsqueda: id → ruta → título + artista (sin distinguir mayúsculas
-/// ni espacios) con duración a ±[durationTolerance].
+/// Orden de búsqueda: identidad → ruta → título + artista (sin distinguir
+/// mayúsculas ni espacios) con duración a ±[durationTolerance].
+///
+/// Es la política de la fuente **local**: la biblioteca solo tiene canciones
+/// locales ([LocalSong]), y la ruta y el título son criterios propios de ella.
 class SongMatcher {
   SongMatcher(
-    List<Song> library, {
+    List<LocalSong> library, {
     this.durationTolerance = const Duration(seconds: 1),
   }) {
     for (final song in library) {
-      _byId[song.id] = song;
+      _byIdentity[song.musicIdentity] = song;
       if (song.path.isNotEmpty) _byPath[song.path] = song;
       _byTitleArtist
           .putIfAbsent(_titleArtistKey(song.title, song.artist), () => [])
@@ -21,23 +25,23 @@ class SongMatcher {
   }
 
   final Duration durationTolerance;
-  final Map<int, Song> _byId = {};
-  final Map<String, Song> _byPath = {};
-  final Map<(String, String), List<Song>> _byTitleArtist = {};
+  final Map<MusicIdentity, LocalSong> _byIdentity = {};
+  final Map<String, LocalSong> _byPath = {};
+  final Map<(String, String), List<LocalSong>> _byTitleArtist = {};
 
   /// La canción de la biblioteca que corresponde a [reference], o `null` si
   /// no está (p. ej. el archivo se borró o la SD está desmontada).
-  Song? match(SongReference reference) =>
-      _byId[reference.songId] ??
+  LocalSong? match(SongReference reference) =>
+      _byIdentity[reference.musicIdentity] ??
       _matchByPath(reference) ??
       _matchByTitleArtistDuration(reference);
 
-  Song? _matchByPath(SongReference reference) {
+  LocalSong? _matchByPath(SongReference reference) {
     final path = reference.path;
     return path == null || path.isEmpty ? null : _byPath[path];
   }
 
-  Song? _matchByTitleArtistDuration(SongReference reference) {
+  LocalSong? _matchByTitleArtistDuration(SongReference reference) {
     final title = reference.title;
     final durationMs = reference.durationMs;
     if (title == null || title.trim().isEmpty || durationMs == null) {

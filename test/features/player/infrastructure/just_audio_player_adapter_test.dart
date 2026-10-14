@@ -1,12 +1,33 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taki/core/domain/entities/local_song.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:taki/core/domain/entities/music_identity.dart';
+import 'package:taki/core/domain/entities/playback_resolution_exception.dart';
+import 'package:taki/core/domain/entities/playback_resource.dart';
 import 'package:taki/core/domain/entities/song.dart';
+import 'package:taki/core/domain/ports/playback_resolver.dart';
 import 'package:taki/features/player/domain/entities/playback_error.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/infrastructure/just_audio_player_adapter.dart';
 
 import '../../../helpers/fake_just_audio_player.dart';
 import '../../../helpers/library_fakes.dart';
+
+/// Resolvedor de prueba: devuelve lo configurado; por defecto, la URI local de
+/// la canción (como el resolvedor real). Registra las canciones resueltas.
+class _ScriptedResolver implements PlaybackResolver {
+  final results = <MusicIdentity, PlaybackResource>{};
+  final failures = <MusicIdentity, PlaybackResolutionException>{};
+  final calls = <Song>[];
+
+  @override
+  Future<PlaybackResource> resolve(Song song) async {
+    calls.add(song);
+    final failure = failures[song.musicIdentity];
+    if (failure != null) throw failure;
+    return results[song.musicIdentity] ?? LocalUriResource((song as LocalSong).contentUri);
+  }
+}
 
 void main() {
   late FakeJustAudioPlayer player;
@@ -283,6 +304,130 @@ void main() {
 
       expect(player.log.where((l) => l.startsWith('seek')), hasLength(10));
       expect(player.log.last, 'pause');
+    });
+  });
+
+  // Fase 2.3: el adaptador ya no decide qué es la canción; convierte el
+  // PlaybackResource que entrega el PlaybackResolver.
+  group('PlaybackResolver', () {
+    late _ScriptedResolver resolver;
+
+    String uriOf(AudioSource source) => (source as UriAudioSource).uri.toString();
+    Song tagOf(AudioSource source) => (source as UriAudioSource).tag as Song;
+
+    setUp(() {
+      resolver = _ScriptedResolver();
+      adapter = JustAudioPlayerAdapter(player: player, resolver: resolver);
+    });
+
+    test('por defecto usa los content URI de las canciones (comportamiento '
+        'de siempre)', () async {
+      final defaultAdapter = JustAudioPlayerAdapter(player: player);
+
+      await defaultAdapter.setQueue([a, b]);
+
+      expect(player.sources.map(uriOf), [a.contentUri, b.contentUri]);
+    });
+
+    test('LocalUriResource → AudioSource.uri con esa URI y la canción como '
+        'tag', () async {
+      resolver.results[a.musicIdentity] = LocalUriResource('content://x/1');
+
+      await adapter.setQueue([a]);
+
+      expect(uriOf(player.sources.single), 'content://x/1');
+      expect(tagOf(player.sources.single), a);
+    });
+
+    test('RemoteUriResource → AudioSource.uri', () async {
+      resolver.results[a.musicIdentity] =
+          RemoteUriResource('https://ejemplo.invalid/a.mp3');
+
+      await adapter.setQueue([a]);
+
+      expect(uriOf(player.sources.single), 'https://ejemplo.invalid/a.mp3');
+    });
+
+    test('la URI no depende de Song.contentUri', () async {
+      resolver.results[a.musicIdentity] = LocalUriResource('content://otra');
+
+      await adapter.setQueue([a]);
+
+      expect(uriOf(player.sources.single), isNot(a.contentUri));
+    });
+
+    test('cada canción se resuelve una vez al encolarla', () async {
+      await adapter.setQueue([a, b, c]);
+      expect(resolver.calls, [a, b, c]);
+
+      await adapter.addToQueue([x]);
+      await adapter.playNext([y]);
+      expect(resolver.calls, [a, b, c, x, y]);
+    });
+
+    for (final (name, resource) in <(String, PlaybackResource)>[
+      ('UnavailableResource', const UnavailableResource(reason: 'sin audio')),
+      ('ProviderPlaybackResource', ProviderPlaybackResource('motor')),
+    ]) {
+      test('$name: la entrada se conserva pero no es reproducible', () async {
+        resolver.results[b.musicIdentity] = resource;
+
+        await adapter.setQueue([a, b, c], startIndex: 1);
+
+        expect(adapter.state.queue, [a, b, c]);
+        expect(player.sources, hasLength(3));
+        expect(uriOf(player.sources[1]), startsWith('taki-unplayable'));
+        expect(tagOf(player.sources[1]), b);
+        expect(uriOf(player.sources[0]), a.contentUri);
+        expect(uriOf(player.sources[2]), c.contentUri);
+      });
+
+      test('$name: al fallar sigue el camino de errores (se emite y salta)',
+          () async {
+        resolver.results[b.musicIdentity] = resource;
+        await adapter.setQueue([a, b, c], startIndex: 1);
+        final emitted = <PlaybackError>[];
+        adapter.errors.listen(emitted.add);
+
+        player.errors.add(PlayerException(0, 'Source error', 1));
+        await pumpEventQueue();
+
+        expect(emitted.single.song, b);
+        expect(await current(), c);
+        expect(adapter.state.queue, [a, b, c]);
+      });
+    }
+
+    test('si la resolución falla, la cola no falla y la entrada queda no '
+        'reproducible', () async {
+      resolver.failures[b.musicIdentity] =
+          const PlaybackResolutionError('no se pudo', cause: 'red');
+      resolver.failures[c.musicIdentity] = IdentityNotFound(c.musicIdentity);
+
+      await adapter.setQueue([a, b, c]);
+
+      expect(adapter.state.queue, [a, b, c]);
+      expect(uriOf(player.sources[0]), a.contentUri);
+      expect(uriOf(player.sources[1]), startsWith('taki-unplayable'));
+      expect(uriOf(player.sources[2]), startsWith('taki-unplayable'));
+    });
+
+    test('mezcla local, remota y no disponible en addToQueue y playNext',
+        () async {
+      await adapter.setQueue([a, b], startIndex: 0);
+      resolver.results[x.musicIdentity] = RemoteUriResource('https://x/x');
+      resolver.results[y.musicIdentity] = const UnavailableResource();
+
+      await adapter.addToQueue([x]);
+      await adapter.playNext([y]);
+
+      expect(adapter.state.queue.map((s) => s.title), ['A', 'Y', 'B', 'X']);
+      expect(player.sources.map(uriOf), [
+        a.contentUri,
+        startsWith('taki-unplayable'),
+        b.contentUri,
+        'https://x/x',
+      ]);
     });
   });
 

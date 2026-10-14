@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taki/core/artwork/album_artwork_image.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_cache.dart';
+import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/core/domain/ports/artwork_repository.dart';
 import 'package:taki/core/theme/taki_colors.dart';
 import 'package:taki/core/theme/taki_elevation.dart';
@@ -28,6 +31,12 @@ class _FakeArtworkRepository implements ArtworkRepository {
     return bytes;
   }
 }
+
+/// [child] con la [ArtworkCache] de prueba en lugar de la de producción.
+Widget _withArtwork(ArtworkCache cache, Widget child) => ProviderScope(
+      overrides: [artworkCacheProvider.overrideWithValue(cache)],
+      child: child,
+    );
 
 Future<void> _pump(WidgetTester tester, Widget child) {
   return tester.pumpWidget(
@@ -144,16 +153,20 @@ void main() {
     });
   });
 
-  group('AlbumArtworkImage (caché de carátulas existente)', () {
+  group('AlbumArtworkBuilder (caché de carátulas existente)', () {
     testWidgets('pide la carátula al tamaño en píxeles reales', (tester) async {
       final repository = _FakeArtworkRepository(_png);
       final cache = ArtworkCache(repository);
 
       await _pump(
         tester,
-        TakiArtwork(
-          size: 48,
-          image: AlbumArtworkImage(7, size: 48, cache: cache),
+        _withArtwork(
+          cache,
+          AlbumArtworkBuilder.reference(
+            reference: const LocalArtworkReference(7),
+            size: 48,
+            builder: (context, image) => TakiArtwork(size: 48, image: image),
+          ),
         ),
       );
       await _settleImage(tester);
@@ -168,10 +181,17 @@ void main() {
 
       await _pump(
         tester,
-        TakiArtwork(
-          size: 48,
-          kind: TakiArtworkKind.playlist,
-          image: AlbumArtworkImage(8, size: 48, cache: cache),
+        _withArtwork(
+          cache,
+          AlbumArtworkBuilder.reference(
+            reference: const LocalArtworkReference(8),
+            size: 48,
+            builder: (context, image) => TakiArtwork(
+              size: 48,
+              kind: TakiArtworkKind.playlist,
+              image: image,
+            ),
+          ),
         ),
       );
       await _settleImage(tester);

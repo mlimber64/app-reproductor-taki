@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/domain/entities/music_identity.dart';
 import '../../../../core/domain/entities/song.dart';
 import '../../../../core/domain/entities/song_reference.dart';
 
@@ -10,7 +11,7 @@ class PlaylistEntry extends Equatable implements SongReference {
     required this.id,
     required this.playlistId,
     required this.position,
-    required this.songId,
+    required this.musicIdentity,
     this.title,
     this.artist,
     this.album,
@@ -27,7 +28,7 @@ class PlaylistEntry extends Equatable implements SongReference {
   final int position;
 
   @override
-  final int songId;
+  final MusicIdentity musicIdentity;
   @override
   final String? title;
   @override
@@ -40,7 +41,7 @@ class PlaylistEntry extends Equatable implements SongReference {
 
   @override
   List<Object?> get props =>
-      [id, playlistId, position, songId, title, artist, album, durationMs, path];
+      [id, playlistId, position, musicIdentity, title, artist, album, durationMs, path];
 }
 
 /// Entrada de playlist resuelta contra la biblioteca: lo que se muestra.

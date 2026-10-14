@@ -1,0 +1,101 @@
+{
+    "headers":  {
+                    "status":  "success",
+                    "code":  0,
+                    "error_message":  "",
+                    "warnings":  "",
+                    "results_count":  2,
+                    "next":  "\u003comitted\u003e"
+                },
+    "results":  [
+                    {
+                        "id":  "2291526",
+                        "name":  "Love\u0027s Harmony (Background Romantic Piano)",
+                        "duration":  144,
+                        "artist_id":  "537900",
+                        "artist_name":  "Lite Saturation",
+                        "artist_idstr":  "Lite_Saturation",
+                        "album_name":  "Endless Affection",
+                        "album_id":  "620618",
+                        "license_ccurl":  "http://creativecommons.org/licenses/by-nc-nd/3.0/",
+                        "position":  4,
+                        "releasedate":  "2025-12-14",
+                        "album_image":  "https://usercontent.jamendo.com?type=album\u0026id=620618\u0026width=300\u0026trackid=2291526",
+                        "audio":  "https://prod-1.storage.jamendo.com/?trackid=2291526\u0026format=mp32\u0026from=\u003cTOKEN\u003e",
+                        "audiodownload":  "https://prod-1.storage.jamendo.com/download/track/2291526/mp32/",
+                        "prourl":  "",
+                        "shorturl":  "https://jamen.do/t/2291526",
+                        "shareurl":  "https://www.jamendo.com/track/2291526",
+                        "waveform":  "\u003comitted\u003e",
+                        "image":  "https://usercontent.jamendo.com?type=album\u0026id=620618\u0026width=300\u0026trackid=2291526",
+                        "musicinfo":  {
+                                          "vocalinstrumental":  "instrumental",
+                                          "lang":  "",
+                                          "gender":  "",
+                                          "acousticelectric":  "acoustic",
+                                          "speed":  "medium",
+                                          "tags":  {
+                                                       "genres":  [
+                                                                      "contemporarypiano",
+                                                                      "neoclassical",
+                                                                      "newage"
+                                                                  ],
+                                                       "instruments":  [
+                                                                           "piano",
+                                                                           "strings"
+                                                                       ],
+                                                       "vartags":  [
+                                                                       "love",
+                                                                       "romantic",
+                                                                       "acoustic"
+                                                                   ]
+                                                   }
+                                      },
+                        "audiodownload_allowed":  true,
+                        "content_id_free":  false
+                    },
+                    {
+                        "id":  "2318689",
+                        "name":  "Noor | Amapiano Dancehall Music",
+                        "duration":  168,
+                        "artist_id":  "593864",
+                        "artist_name":  "Kontraa",
+                        "artist_idstr":  "Praz_Khanal_(4)",
+                        "album_name":  "Noor | Amapiano Dancehall Music",
+                        "album_id":  "633517",
+                        "license_ccurl":  "http://creativecommons.org/licenses/by-nd/3.0/",
+                        "position":  1,
+                        "releasedate":  "2026-05-05",
+                        "album_image":  "https://usercontent.jamendo.com?type=album\u0026id=633517\u0026width=300\u0026trackid=2318689",
+                        "audio":  "https://prod-1.storage.jamendo.com/?trackid=2318689\u0026format=mp32\u0026from=\u003cTOKEN\u003e",
+                        "audiodownload":  "https://prod-1.storage.jamendo.com/download/track/2318689/mp32/",
+                        "prourl":  "",
+                        "shorturl":  "https://jamen.do/t/2318689",
+                        "shareurl":  "https://www.jamendo.com/track/2318689",
+                        "waveform":  "\u003comitted\u003e",
+                        "image":  "https://usercontent.jamendo.com?type=album\u0026id=633517\u0026width=300\u0026trackid=2318689",
+                        "musicinfo":  {
+                                          "vocalinstrumental":  "instrumental",
+                                          "lang":  "",
+                                          "gender":  "",
+                                          "acousticelectric":  "electric",
+                                          "speed":  "medium",
+                                          "tags":  {
+                                                       "genres":  [
+                                                                      "electronic",
+                                                                      "dancehall"
+                                                                  ],
+                                                       "instruments":  [
+                                                                           "bass",
+                                                                           "guitar"
+                                                                       ],
+                                                       "vartags":  [
+                                                                       "happy"
+                                                                   ]
+                                                   }
+                                      },
+                        "audiodownload_allowed":  true,
+                        "content_id_free":  false
+                    }
+                ]
+}

@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taki/core/domain/entities/song.dart';
+import 'package:taki/core/domain/entities/local_song.dart';
 
 /// Canción de prueba (los tests de core no dependen de helpers de features).
-Song testSong({
+LocalSong testSong({
   int id = 1,
   String title = 'Matador',
   String? artist = 'Los Fabulosos Cadillacs',
   String? album = 'Vasos vacíos',
   int durationMs = 185000,
 }) {
-  return Song(
+  return LocalSong(
     id: id,
     title: title,
     artist: artist,
     album: album,
     albumId: 10,
+    artwork: localArtworkReference(10),
     durationMs: durationMs,
     path: '/music/$id.mp3',
     contentUri: 'content://media/external/audio/media/$id',
-    dateAdded: null,
   );
 }
 

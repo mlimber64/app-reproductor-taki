@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+import '../../../helpers/artwork_reference_ext.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
+import 'package:taki/core/domain/entities/music_identity.dart';
 import 'package:taki/core/domain/ports/artwork_repository.dart';
 import 'package:taki/core/theme/taki_colors.dart';
 import 'package:taki/core/theme/taki_typography.dart';
@@ -19,16 +22,23 @@ import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/pages/queue_page.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 
+import '../../../helpers/universal_song.dart';
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
+import '../../../helpers/artwork_image.dart';
 
-/// Carátulas de prueba: bytes distintos por álbum; cuenta las peticiones.
+/// Carátulas de prueba: bytes distintos por álbum; cuenta las peticiones. Con
+/// [missing] el álbum no tiene carátula; con [failing] la lectura falla.
 class _BytesArtworkRepository implements ArtworkRepository {
   final requests = <(int, int)>[];
+  final missing = <int>{};
+  final failing = <int>{};
 
   @override
   Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
     requests.add((albumId, size));
+    if (failing.contains(albumId)) throw StateError('lectura fallida');
+    if (missing.contains(albumId)) return null;
     return Uint8List.fromList([albumId, size]);
   }
 }
@@ -100,6 +110,41 @@ void main() {
       );
 
   Finder clearButton() => find.widgetWithText(TakiButton, 'Limpiar');
+
+  testWidgets('la fila y la tarjeta actual usan song.artwork, no albumId',
+      (tester) async {
+    final remote = remoteArtworkSong(title: 'Remota');
+    final artwork = _BytesArtworkRepository();
+    await pumpQueue(
+      tester,
+      state: PlaybackState(queue: [remote, remoteArtworkSong(id: 71)], currentIndex: 0),
+      overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+    );
+
+    final builders = tester
+        .widgetList<AlbumArtworkBuilder>(find.byType(AlbumArtworkBuilder))
+        .toList();
+    expect(builders, hasLength(2)); // tarjeta «Sonando ahora» + una fila
+    expect(builders.map((b) => b.reference), everyElement(remoteTestArtwork));
+    expect(artwork.requests, isEmpty);
+  });
+
+  testWidgets(
+      'las claves de fila son identidad + aparición (no Song.id), también '
+      'con canciones repetidas', (tester) async {
+    // Las tres tienen id 0: solo la identidad las distingue.
+    final x = buildUniversalSong(MusicIdentity('otra', 'x'), title: 'X');
+    final y = buildUniversalSong(MusicIdentity('otra', 'y'), title: 'Y');
+    await pumpQueue(
+      tester,
+      state: PlaybackState(queue: [a, b, x, y, x], currentIndex: 1),
+    );
+
+    expect(find.byKey(ValueKey((x.musicIdentity, 1))), findsOneWidget);
+    expect(find.byKey(ValueKey((y.musicIdentity, 1))), findsOneWidget);
+    expect(find.byKey(ValueKey((x.musicIdentity, 2))), findsOneWidget);
+    expect(find.byKey(ValueKey((y.musicIdentity, 2))), findsNothing);
+  });
 
   testWidgets('muestra "Sonando ahora" y solo lo que viene después',
       (tester) async {
@@ -227,7 +272,7 @@ void main() {
           find.descendant(of: row(title), matching: find.byType(TakiArtwork)),
         );
         expect(art.size, TakiSongTile.artworkSize, reason: title);
-        final image = art.image! as MemoryImage;
+        final image = memoryImageOf(art.image!);
         expect(image.bytes.first, albumId, reason: title);
       }
       // Una petición por álbum y tamaño (la caché deduplica).
@@ -517,5 +562,96 @@ void main() {
         expect(title.bottom, lessThanOrEqualTo(tester.getRect(row('C')).bottom));
       });
     }
+  });
+
+  // La resolución de carátulas la hace AlbumArtworkBuilder (core/artwork); la
+  // imagen (MemoryImage a 48), el placeholder y la deduplicación ya los cubre
+  // el grupo 1.6D.
+  group('Artwork compartido (Fase 1.8C)', () {
+    AlbumArtworkBuilder builderOf(WidgetTester tester, String title) =>
+        tester.widget<AlbumArtworkBuilder>(
+          find.ancestor(
+            of: find.text(title),
+            matching: find.byType(AlbumArtworkBuilder),
+          ),
+        );
+
+    TakiArtwork artOf(WidgetTester tester, String title) =>
+        tester.widget<TakiArtwork>(
+          find.descendant(of: row(title), matching: find.byType(TakiArtwork)),
+        );
+
+    testWidgets('la tarjeta de la actual y cada fila usan AlbumArtworkBuilder '
+        'con su albumId y el tamaño de TakiSongTile (48)', (tester) async {
+      final artwork = _BytesArtworkRepository();
+      await pumpQueue(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      // B es la actual (tarjeta); C y D, las filas de "A continuación".
+      expect(find.byType(AlbumArtworkBuilder), findsNWidgets(3));
+      expect(
+        [for (final title in ['B', 'C', 'D']) builderOf(tester, title).albumId],
+        [10, 30, 40],
+      );
+      for (final title in ['B', 'C', 'D']) {
+        expect(builderOf(tester, title).size, 48, reason: title);
+        expect(builderOf(tester, title).size, TakiSongTile.artworkSize);
+      }
+      final physical = (48 * tester.view.devicePixelRatio).round();
+      expect(artwork.requests.map((r) => r.$2).toSet(), {physical});
+
+      // La actual conserva su estado y su carátula.
+      expect(tileOf(tester, 'B').playback, TakiNowPlaying.paused);
+      expect(artOf(tester, 'B').image, isNotNull);
+    });
+
+    testWidgets('un álbum compartido por varias canciones se pide una sola '
+        'vez', (tester) async {
+      final artwork = _BytesArtworkRepository();
+      final e = buildSong(id: 5, title: 'E', albumId: 30);
+      await pumpQueue(
+        tester,
+        state: PlaybackState(queue: [a, b, c, e], currentIndex: 1),
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      expect(artwork.requests.where((r) => r.$1 == 30), hasLength(1));
+      expect(artOf(tester, 'C').image, isNotNull);
+      expect(artOf(tester, 'E').image, isNotNull);
+    });
+
+    testWidgets('álbum sin carátula: placeholder, sin romper la cola',
+        (tester) async {
+      final artwork = _BytesArtworkRepository()..missing.add(40);
+      await pumpQueue(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      expect(artOf(tester, 'D').image, isNull);
+      expect(artOf(tester, 'C').image, isNotNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('error de lectura de una carátula: la fila y la cola siguen '
+        'funcionando', (tester) async {
+      final artwork = _BytesArtworkRepository()..failing.add(30);
+      await pumpQueue(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+
+      expect(artOf(tester, 'C').image, isNull);
+      expect(artOf(tester, 'D').image, isNotNull);
+      expect(artOf(tester, 'B').image, isNotNull);
+      expect(tester.takeException(), isNull);
+
+      // Tocar la fila sin carátula sigue saltando a esa canción.
+      await tester.tap(find.text('C'));
+      await tester.pumpAndSettle();
+      expect(player.calls, contains('skipToIndex(2)'));
+    });
   });
 }

@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/domain/entities/music_identity.dart';
+
 /// Playlist propia, con su resumen.
 class Playlist extends Equatable {
   const Playlist({
@@ -9,7 +11,7 @@ class Playlist extends Equatable {
     required this.totalDurationMs,
     required this.createdAt,
     required this.updatedAt,
-    this.coverSongIds = const [],
+    this.coverIdentities = const [],
   });
 
   final int id;
@@ -21,8 +23,9 @@ class Playlist extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  /// Ids de las primeras canciones (hasta 4), para el mosaico de carátulas.
-  final List<int> coverSongIds;
+  /// Identidades de las primeras canciones (hasta 4), para el mosaico de
+  /// carátulas.
+  final List<MusicIdentity> coverIdentities;
 
   Duration get totalDuration => Duration(milliseconds: totalDurationMs);
 
@@ -34,6 +37,6 @@ class Playlist extends Equatable {
         totalDurationMs,
         createdAt,
         updatedAt,
-        coverSongIds,
+        coverIdentities,
       ];
 }

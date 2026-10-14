@@ -1,11 +1,12 @@
 import 'dart:async';
+import '../../../helpers/artwork_reference_ext.dart';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:taki/core/theme/app_colors.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/core/theme/taki_colors.dart';
 import 'package:taki/core/theme/taki_icon_size.dart';
@@ -14,14 +15,23 @@ import 'package:taki/core/widgets/taki_artwork.dart';
 import 'package:taki/core/widgets/taki_playback_controls.dart';
 import 'package:taki/core/widgets/taki_progress_bar.dart';
 import 'package:taki/features/library/presentation/providers/favorites_providers.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
+import 'package:taki/core/domain/ports/artwork_repository.dart';
 import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/pages/now_playing_page.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 
+import 'package:taki/core/domain/entities/music_identity.dart';
+import 'package:taki/core/links/external_link_providers.dart';
+import 'package:taki/core/lookup/attribution_lookup_providers.dart';
+
+import '../../../helpers/attribution_fakes.dart';
+import '../../../helpers/universal_song.dart';
 import '../../../helpers/favorites_fakes.dart';
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
+import '../../../helpers/artwork_image.dart';
 
 void main() {
   late FakeAudioPlayerPort player;
@@ -119,7 +129,7 @@ void main() {
       await tester.tap(find.byTooltip('Añadir a favoritos'));
       await tester.pumpAndSettle();
 
-      expect(favorites.entries.keys, [song.id]);
+      expect(favorites.entries.keys, [song.musicIdentity]);
       expect(find.byTooltip('Quitar de favoritos'), findsOneWidget);
       expect(
         tester.widget<Icon>(find.byIcon(Icons.favorite_rounded)).color,
@@ -131,7 +141,7 @@ void main() {
       expect(favorites.entries, isEmpty);
       expect(
         tester.widget<Icon>(find.byIcon(Icons.favorite_border_rounded)).color,
-        AppColors.textSecondary,
+        TakiColors.textSecondary,
       );
     });
 
@@ -226,7 +236,7 @@ void main() {
     await openNowPlaying(tester);
     final accent = accentOf(tester);
 
-    expect(iconColor(tester, Icons.shuffle_rounded), AppColors.textSecondary);
+    expect(iconColor(tester, Icons.shuffle_rounded), TakiColors.textSecondary);
     expect(toggleCircle(tester, 'Aleatorio'), isNull);
 
     await tester.tap(find.byTooltip('Aleatorio'));
@@ -251,7 +261,7 @@ void main() {
     final accent = accentOf(tester);
 
     expect(controls(tester).repeatMode, TakiRepeatMode.off);
-    expect(iconColor(tester, Icons.repeat_rounded), AppColors.textSecondary);
+    expect(iconColor(tester, Icons.repeat_rounded), TakiColors.textSecondary);
     expect(toggleCircle(tester, 'Repetir'), isNull);
 
     await tester.tap(find.byTooltip('Repetir'));
@@ -273,7 +283,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(player.calls.last, 'setRepeatMode(off)');
     expect(controls(tester).repeatMode, TakiRepeatMode.off);
-    expect(iconColor(tester, Icons.repeat_rounded), AppColors.textSecondary);
+    expect(iconColor(tester, Icons.repeat_rounded), TakiColors.textSecondary);
     expect(toggleCircle(tester, 'Repetir'), isNull);
   });
 
@@ -675,4 +685,338 @@ void main() {
       });
     }
   });
+
+  // Fase 3.2F: la atribución es secundaria y nunca bloquea la reproducción.
+  group('Atribución (Fase 3.2F)', () {
+    final idA = MusicIdentity('jamendo', 'A');
+    final idB = MusicIdentity('jamendo', 'B');
+    final songA = buildUniversalSong(idA, title: 'Remota A');
+    final songB = buildUniversalSong(idB, title: 'Remota B');
+    final pageUrl = Uri.parse('https://www.jamendo.com/track/A');
+    final licenseUrl = Uri.parse('https://creativecommons.org/licenses/by/4.0/');
+    late ScriptedAttributionLookup lookup;
+    late FakeLinkOpener opener;
+
+    setUp(() {
+      lookup = ScriptedAttributionLookup();
+      opener = FakeLinkOpener();
+    });
+
+    Future<void> open(WidgetTester tester, {Size size = const Size(400, 800)}) =>
+        openNowPlaying(
+          tester,
+          size: size,
+          state: PlaybackState(queue: [songA, songB], currentIndex: 0),
+          overrides: [
+            attributionLookupProvider.overrideWithValue(lookup),
+            externalLinkOpenerProvider.overrideWithValue(opener),
+          ],
+        );
+
+    testWidgets('muestra origen, licencia y enlaces cuando llega',
+        (tester) async {
+      await open(tester);
+      expect(find.textContaining('Origen'), findsNothing);
+
+      lookup.found(testAttribution(idA,
+          pageUrl: pageUrl, licenseUrl: licenseUrl, licenseName: 'CC BY 4.0'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Origen · Jamendo'), findsOneWidget);
+      expect(find.text('Licencia · CC BY 4.0'), findsOneWidget);
+      await tester.tap(find.text('Ver canción'));
+      await tester.pump();
+      expect(opener.opened, [pageUrl]);
+    });
+
+    testWidgets('mientras carga, los controles y la carátula ya están',
+        (tester) async {
+      await open(tester);
+      expect(find.byType(TakiPlaybackControls), findsOneWidget);
+      expect(find.byType(AlbumArtworkBuilder), findsOneWidget);
+      expect(find.text('Remota A'), findsOneWidget);
+    });
+
+    testWidgets('ausente: no aparece ninguna sección', (tester) async {
+      await open(tester);
+      lookup.absent(idA);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Origen'), findsNothing);
+      expect(find.text('Ver canción'), findsNothing);
+    });
+
+    testWidgets('un fallo no muestra error ni bloquea la reproducción',
+        (tester) async {
+      await open(tester);
+      lookup.fail(idA);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Origen'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
+      // Los controles siguen funcionando.
+      await tester.tap(find.byTooltip('Siguiente'));
+      await tester.pump();
+      expect(player.calls, contains('skipToNext'));
+    });
+
+    testWidgets('A → B: la respuesta tardía de A nunca se pinta sobre B',
+        (tester) async {
+      await open(tester);
+      player.emitState(PlaybackState(queue: [songA, songB], currentIndex: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('Remota B'), findsOneWidget);
+
+      lookup.found(testAttribution(idB,
+          providerName: 'Prov B', pageUrl: pageUrl, licenseName: 'Lic B'));
+      await tester.pumpAndSettle();
+      lookup.found(testAttribution(idA,
+          providerName: 'Prov A', pageUrl: pageUrl, licenseName: 'Lic A'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Origen · Prov B'), findsOneWidget);
+      expect(find.textContaining('Prov A'), findsNothing);
+      expect(find.textContaining('Lic A'), findsNothing);
+    });
+
+    for (final size in [
+      const Size(360, 800),
+      const Size(360, 640),
+      const Size(360, 480),
+      const Size(640, 360),
+    ]) {
+      testWidgets('$size con atribución completa: sin desbordes',
+          (tester) async {
+        await open(tester, size: size);
+        lookup.found(testAttribution(idA,
+            pageUrl: pageUrl,
+            licenseUrl: licenseUrl,
+            licenseName: 'CC BY-NC-ND 3.0'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('Ver licencia'));
+        await tester.pumpAndSettle();
+        expect(find.text('Ver licencia'), findsOneWidget);
+      });
+    }
+  });
+
+  // La resolución de la carátula la hace AlbumArtworkBuilder (core/artwork). El
+  // tamaño de Reproduciendo no es una constante: depende del layout (vertical,
+  // pantalla muy baja con scroll, horizontal), así que se protege que el lado
+  // pedido sea el que se dibuja.
+  group('Artwork compartido (Fase 1.8D)', () {
+    final other = buildSong(id: 2, title: 'Otra canción', albumId: 20);
+
+    AlbumArtworkBuilder builderOf(WidgetTester tester) =>
+        tester.widget<AlbumArtworkBuilder>(find.byType(AlbumArtworkBuilder));
+
+    TakiArtwork artworkOf(WidgetTester tester) =>
+        tester.widget<TakiArtwork>(find.byType(TakiArtwork));
+
+    Future<_BytesArtworkRepository> open(
+      WidgetTester tester, {
+      void Function(_BytesArtworkRepository)? configure,
+      Size size = const Size(400, 800),
+      PlaybackState? state,
+    }) async {
+      final artwork = _BytesArtworkRepository();
+      configure?.call(artwork);
+      await openNowPlaying(
+        tester,
+        size: size,
+        state: state,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      return artwork;
+    }
+
+    // Lado de la carátula en cada layout, con la canción de estos tests (título
+    // de dos líneas). Valores medidos con el adaptador anterior (idénticos con
+    // el builder), para que un tamaño distinto falle.
+    for (final size in [
+      const Size(400, 800), // vertical
+      const Size(360, 480), // muy baja, con scroll
+      const Size(640, 360), // horizontal
+    ]) {
+      testWidgets('$size: usa song.artwork, no albumId', (tester) async {
+        final remote = remoteArtworkSong();
+        final artwork = await open(
+          tester,
+          size: size,
+          state: PlaybackState(queue: [remote], currentIndex: 0),
+        );
+
+        expect(find.byType(AlbumArtworkBuilder), findsOneWidget);
+        expect(builderOf(tester).reference, remoteTestArtwork);
+        expect(builderOf(tester).albumId, isNull);
+        expect(artwork.requests, isEmpty);
+      });
+    }
+
+    for (final (name, size, side) in [
+      ('vertical 400x800', const Size(400, 800), 342.0),
+      ('vertical 360x800', const Size(360, 800), 312.0),
+      ('vertical 412x915', const Size(412, 915), 364.0),
+      // Ancho fraccionario: el lado se redondea hacia abajo (313.5 → 313).
+      ('vertical 361.5x800', const Size(361.5, 800), 313.0),
+      ('pequeña 360x640', const Size(360, 640), 182.0),
+      ('muy baja 360x480 (con scroll)', const Size(360, 480), 240.0),
+      ('horizontal 640x360', const Size(640, 360), 224.0),
+    ]) {
+      testWidgets('$name: usa AlbumArtworkBuilder con el albumId de la '
+          'canción y el mismo lado que dibuja ($side)', (tester) async {
+        final artwork = await open(tester, size: size);
+
+        expect(find.byType(AlbumArtworkBuilder), findsOneWidget);
+        final builder = builderOf(tester);
+        expect(builder.albumId, song.albumId);
+        // Lado entero, el esperado y el mismo que se dibuja.
+        expect(builder.size, side);
+        expect(artworkOf(tester).size, side);
+        expect(tester.getSize(find.byType(TakiArtwork)).width, side);
+        expect(artworkOf(tester).hero, isTrue);
+        // La petición es ese lado × dpr (1 en estos tests).
+        expect(artwork.requests, [(song.albumId, side.round())]);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('cambio de dpr: vuelve a pedir el mismo lado al tamaño físico '
+        'nuevo', (tester) async {
+      final artwork = await open(tester, size: const Size(360, 800));
+      expect(artwork.requests, [(song.albumId, 312)]);
+
+      // Misma pantalla lógica (360x800) a otra densidad.
+      tester.view.physicalSize = const Size(360, 800) * 2.625;
+      tester.view.devicePixelRatio = 2.625;
+      await tester.pumpAndSettle();
+
+      expect(builderOf(tester).size, 312);
+      expect(artwork.requests, [
+        (song.albumId, 312),
+        (song.albumId, (312 * 2.625).round()), // 819
+      ]);
+    });
+
+    testWidgets('artwork disponible: MemoryImage con los bytes del álbum',
+        (tester) async {
+      await open(tester);
+
+      final image = memoryImageOf(artworkOf(tester).image!);
+      expect(image.bytes.first, song.albumId);
+    });
+
+    testWidgets('artwork ausente: placeholder y la pantalla sigue entera',
+        (tester) async {
+      await open(tester, configure: (r) => r.missing.add(song.albumId!));
+
+      expect(artworkOf(tester).image, isNull);
+      expect(artworkOf(tester).hero, isTrue);
+      expect(find.text(song.title), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('bytes vacíos: placeholder', (tester) async {
+      await open(tester, configure: (r) => r.empty.add(song.albumId!));
+
+      expect(artworkOf(tester).image, isNull);
+    });
+
+    testWidgets('canción sin álbum: placeholder y ninguna petición',
+        (tester) async {
+      final noAlbum = buildSong(title: 'Sin álbum', albumId: null);
+      final artwork = await open(
+        tester,
+        state: PlaybackState(queue: [noAlbum], currentIndex: 0),
+      );
+
+      expect(builderOf(tester).albumId, isNull);
+      expect(artworkOf(tester).image, isNull);
+      expect(artwork.requests, isEmpty);
+    });
+
+    testWidgets('error de lectura: sin carátula y los controles siguen '
+        'funcionando', (tester) async {
+      await open(tester, configure: (r) => r.failing.add(song.albumId!));
+
+      expect(artworkOf(tester).image, isNull);
+      expect(tester.takeException(), isNull);
+      for (final label in ['Aleatorio', 'Anterior', 'Reproducir', 'Siguiente']) {
+        expect(find.byTooltip(label), findsOneWidget, reason: label);
+      }
+
+      player.emitState(
+        PlaybackState(queue: [song], currentIndex: 0, isPlaying: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Pausar'), findsOneWidget);
+    });
+
+    testWidgets('cambio de canción: resuelve la carátula nueva y al volver '
+        'no la repite', (tester) async {
+      final artwork = await open(
+        tester,
+        state: PlaybackState(queue: [song, other], currentIndex: 0),
+      );
+      expect(memoryImageOf(artworkOf(tester).image!).bytes.first, 10);
+
+      player.emitState(PlaybackState(queue: [song, other], currentIndex: 1));
+      await tester.pumpAndSettle();
+      expect(builderOf(tester).albumId, 20);
+      expect(memoryImageOf(artworkOf(tester).image!).bytes.first, 20);
+
+      player.emitState(PlaybackState(queue: [song, other], currentIndex: 0));
+      await tester.pumpAndSettle();
+      expect(memoryImageOf(artworkOf(tester).image!).bytes.first, 10);
+
+      expect([for (final r in artwork.requests) r.$1], [10, 20]);
+    });
+
+    testWidgets('play/pausa y posición no repiten lecturas y el estado se '
+        'mantiene', (tester) async {
+      final artwork = await open(tester);
+      final before = artwork.requests.length;
+      final bytes = memoryImageOf(artworkOf(tester).image!).bytes;
+
+      player.emitState(
+        PlaybackState(queue: [song], currentIndex: 0, isPlaying: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Pausar'), findsOneWidget);
+      for (var s = 1; s <= 3; s++) {
+        player.emitPosition(Duration(seconds: s));
+        await tester.pump();
+      }
+
+      player.emitState(PlaybackState(queue: [song], currentIndex: 0));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Reproducir'), findsOneWidget);
+
+      expect(artwork.requests.length, before);
+      expect(
+        identical(memoryImageOf(artworkOf(tester).image!).bytes, bytes),
+        isTrue,
+      );
+    });
+  });
+}
+
+/// Carátulas de prueba: bytes con el álbum pedido; cuenta las peticiones. Con
+/// [missing] el álbum no tiene carátula, con [empty] los bytes salen vacíos y
+/// con [failing] la lectura falla.
+class _BytesArtworkRepository implements ArtworkRepository {
+  final requests = <(int, int)>[];
+  final missing = <int>{};
+  final empty = <int>{};
+  final failing = <int>{};
+
+  @override
+  Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
+    requests.add((albumId, size));
+    if (failing.contains(albumId)) throw StateError('lectura fallida');
+    if (missing.contains(albumId)) return null;
+    if (empty.contains(albumId)) return Uint8List(0);
+    return Uint8List.fromList([albumId, size]);
+  }
 }

@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 
+import '../../../helpers/artwork_reference_ext.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/app.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/core/domain/ports/artwork_repository.dart';
 import 'package:taki/core/theme/taki_colors.dart';
@@ -18,14 +20,20 @@ import 'package:taki/features/player/presentation/widgets/mini_player.dart';
 
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
+import '../../../helpers/artwork_image.dart';
 
-/// Carátulas de prueba: bytes con el álbum y el tamaño pedidos.
+/// Carátulas de prueba: bytes con el álbum y el tamaño pedidos. Con [missing]
+/// el álbum no tiene carátula; con [failing] la lectura falla.
 class _BytesArtworkRepository implements ArtworkRepository {
   final requests = <(int, int)>[];
+  final missing = <int>{};
+  final failing = <int>{};
 
   @override
   Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
     requests.add((albumId, size));
+    if (failing.contains(albumId)) throw StateError('lectura fallida');
+    if (missing.contains(albumId)) return null;
     return Uint8List.fromList([albumId, size]);
   }
 }
@@ -336,7 +344,7 @@ void main() {
         ),
       );
       expect(art.size, TakiMiniPlayer.artworkSize);
-      expect((art.image! as MemoryImage).bytes.first, song.albumId);
+      expect(memoryImageOf(art.image!).bytes.first, song.albumId);
       // 48 lógicos a la densidad de la pantalla.
       final pixels =
           (TakiMiniPlayer.artworkSize * tester.view.devicePixelRatio).round();
@@ -435,5 +443,130 @@ void main() {
         expect(mini.contains(play.center), isTrue);
       });
     }
+  });
+
+  // La resolución de carátulas la hace AlbumArtworkBuilder (core/artwork); la
+  // imagen (MemoryImage a 48), la petición exacta, el placeholder y "sin
+  // peticiones con cada posición" ya los cubre el grupo 1.6E.
+  group('Artwork compartido (Fase 1.8C)', () {
+    final other = buildSong(id: 2, title: 'Otra canción', albumId: 20);
+
+    TakiArtwork artOf(WidgetTester tester) => tester.widget<TakiArtwork>(
+          find.descendant(
+            of: find.byType(TakiMiniPlayer),
+            matching: find.byType(TakiArtwork),
+          ),
+        );
+
+    testWidgets('usa song.artwork, no albumId', (tester) async {
+      final remote = remoteArtworkSong();
+      final artwork = _BytesArtworkRepository();
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(
+        tester,
+        state: PlaybackState(queue: [remote], currentIndex: 0),
+      );
+
+      final builder =
+          tester.widget<AlbumArtworkBuilder>(find.byType(AlbumArtworkBuilder));
+      expect(builder.reference, remoteTestArtwork);
+      expect(builder.albumId, isNull);
+      expect(artwork.requests, isEmpty);
+    });
+
+    testWidgets('usa AlbumArtworkBuilder con el albumId de la canción y el '
+        'tamaño del mini player (48, el que usaba antes)', (tester) async {
+      final artwork = _BytesArtworkRepository();
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(tester);
+
+      final builder =
+          tester.widget<AlbumArtworkBuilder>(find.byType(AlbumArtworkBuilder));
+      expect(builder.albumId, song.albumId);
+      expect(builder.size, 48);
+      expect(builder.size, TakiMiniPlayer.artworkSize);
+      final physical = (48 * tester.view.devicePixelRatio).round();
+      expect(artwork.requests, [(song.albumId, physical)]);
+    });
+
+    testWidgets('error de lectura: sin carátula y el mini player sigue '
+        'funcionando', (tester) async {
+      final artwork = _BytesArtworkRepository()..failing.add(song.albumId!);
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(tester);
+
+      expect(miniPlayer(tester).artwork, isNull);
+      expect(find.text('Canción de prueba'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      verify(() => togglePlayPause()).called(1);
+    });
+
+    testWidgets('carátula ausente: placeholder y el título sigue', (tester) async {
+      final artwork = _BytesArtworkRepository()..missing.add(song.albumId!);
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(tester);
+
+      expect(miniPlayer(tester).artwork, isNull);
+      expect(find.text('Canción de prueba'), findsOneWidget);
+    });
+
+    testWidgets('cambio de canción: pide la carátula del álbum nuevo y al '
+        'volver no la repite', (tester) async {
+      final artwork = _BytesArtworkRepository();
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(
+        tester,
+        state: PlaybackState(queue: [song, other], currentIndex: 0),
+      );
+      expect(memoryImageOf(artOf(tester).image!).bytes.first, song.albumId);
+
+      player.emitState(PlaybackState(queue: [song, other], currentIndex: 1));
+      await tester.pumpAndSettle();
+      expect(memoryImageOf(artOf(tester).image!).bytes.first, 20);
+
+      player.emitState(PlaybackState(queue: [song, other], currentIndex: 0));
+      await tester.pumpAndSettle();
+      expect(memoryImageOf(artOf(tester).image!).bytes.first, song.albumId);
+
+      expect([for (final r in artwork.requests) r.$1], [song.albumId, 20]);
+    });
+
+    testWidgets('play/pausa cambia el estado sin volver a pedir ni cambiar la '
+        'carátula', (tester) async {
+      final artwork = _BytesArtworkRepository();
+      await pumpApp(
+        tester,
+        overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+      );
+      await startSong(tester);
+      final bytes = memoryImageOf(artOf(tester).image!).bytes;
+      final before = artwork.requests.length;
+
+      await startSong(tester, isPlaying: true);
+      expect(miniPlayer(tester).isPlaying, isTrue);
+      expect(identical(memoryImageOf(artOf(tester).image!).bytes, bytes),
+          isTrue);
+
+      await startSong(tester);
+      expect(miniPlayer(tester).isPlaying, isFalse);
+      expect(artwork.requests.length, before);
+    });
   });
 }

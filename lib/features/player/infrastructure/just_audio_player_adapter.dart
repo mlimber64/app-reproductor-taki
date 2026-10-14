@@ -2,7 +2,11 @@ import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
 
+import '../../../core/domain/entities/playback_resolution_exception.dart';
+import '../../../core/domain/entities/playback_resource.dart';
 import '../../../core/domain/entities/song.dart';
+import '../../../core/domain/ports/playback_resolver.dart';
+import '../../../core/domain/services/local_playback_resolver.dart';
 import '../domain/entities/playback_error.dart';
 import '../domain/entities/playback_state.dart';
 import '../domain/ports/audio_player_port.dart';
@@ -25,9 +29,21 @@ import 'queue_shuffle_order.dart';
 /// El port trabaja siempre con índices de la cola real; aquí se traducen a
 /// índices de fuente. Añadir, quitar o mover usan las operaciones incrementales
 /// de just_audio, que no recargan la cola ni cortan la canción actual.
+///
+/// Cómo se reproduce cada canción lo decide el [PlaybackResolver] (por defecto,
+/// el local); este adaptador solo convierte el [PlaybackResource] a una fuente
+/// de just_audio:
+/// - [LocalUriResource] y [RemoteUriResource] → `AudioSource.uri`. HLS/DASH, si
+///   algún día llegan como URI, los decide just_audio/ExoPlayer, no el dominio.
+/// - [ProviderPlaybackResource] (motor propio, aún sin soporte) y
+///   [UnavailableResource], o si la resolución falla → una fuente que **no se
+///   puede reproducir**. La entrada se conserva en la cola (los índices siguen
+///   coincidiendo con la cola del estado) y al llegar su turno falla por el
+///   camino de siempre: se emite [PlaybackError] y se salta a la siguiente.
 class JustAudioPlayerAdapter implements AudioPlayerPort {
-  JustAudioPlayerAdapter({AudioPlayer? player})
-      : _player = player ?? AudioPlayer(useLazyPreparation: true) {
+  JustAudioPlayerAdapter({AudioPlayer? player, PlaybackResolver? resolver})
+      : _player = player ?? AudioPlayer(useLazyPreparation: true),
+        _resolver = resolver ?? const LocalPlaybackResolver() {
     _subscriptions.addAll([
       _player.playbackEventStream.listen(
         (_) => _emitState(),
@@ -48,6 +64,7 @@ class JustAudioPlayerAdapter implements AudioPlayerPort {
   static const Duration _restartThreshold = Duration(seconds: 3);
 
   final AudioPlayer _player;
+  final PlaybackResolver _resolver;
   final QueueShuffleOrder _shuffleOrder = QueueShuffleOrder();
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final StreamController<PlaybackState> _stateController =
@@ -92,27 +109,30 @@ class JustAudioPlayerAdapter implements AudioPlayerPort {
 
   @override
   Future<void> setQueue(List<Song> songs, {int startIndex = 0}) {
-    return _serialized(() async {
-      _sources = List.unmodifiable(songs);
-      if (songs.isEmpty) {
-        await _player.stop();
-        await _player.setAudioSources(const [], shuffleOrder: _shuffleOrder);
-        _commitQueue();
-        return;
-      }
+    return _serialized(() => _replaceQueue(songs, startIndex));
+  }
 
-      await _player.setAudioSources(
-        [for (final song in songs) _toSource(song)],
-        initialIndex: startIndex.clamp(0, songs.length - 1),
-        initialPosition: Duration.zero,
-        // No cargar aquí: play() la carga. Así un archivo roto no hace fallar
-        // setQueue, sino que se salta como cualquier otro error.
-        preload: false,
-        shuffleOrder: _shuffleOrder,
-      );
-      if (_player.shuffleModeEnabled) await _player.shuffle();
+  /// Cuerpo de [setQueue]. Solo se llama **dentro** de [_serialized].
+  Future<void> _replaceQueue(List<Song> songs, int startIndex) async {
+    _sources = List.unmodifiable(songs);
+    if (songs.isEmpty) {
+      await _player.stop();
+      await _player.setAudioSources(const [], shuffleOrder: _shuffleOrder);
       _commitQueue();
-    });
+      return;
+    }
+
+    await _player.setAudioSources(
+      await _toSources(songs),
+      initialIndex: startIndex.clamp(0, songs.length - 1),
+      initialPosition: Duration.zero,
+      // No cargar aquí: play() la carga. Así un archivo roto no hace fallar
+      // setQueue, sino que se salta como cualquier otro error.
+      preload: false,
+      shuffleOrder: _shuffleOrder,
+    );
+    if (_player.shuffleModeEnabled) await _player.shuffle();
+    _commitQueue();
   }
 
   @override
@@ -212,11 +232,13 @@ class JustAudioPlayerAdapter implements AudioPlayerPort {
 
   @override
   Future<void> addToQueue(List<Song> songs) {
-    if (_sources.isEmpty) return setQueue(songs);
     return _serialized(() async {
+      // Con la cola vacía **en el momento de aplicarse** (no al pedirse): una
+      // operación anterior aún pendiente puede estar llenándola.
+      if (_sources.isEmpty) return _replaceQueue(songs, 0);
       if (songs.isEmpty) return;
       _shuffleOrder.placeNextInsertAt(null); // Al final del orden aleatorio.
-      await _player.addAudioSources([for (final song in songs) _toSource(song)]);
+      await _player.addAudioSources(await _toSources(songs));
       _sources = List.unmodifiable([..._sources, ...songs]);
       _commitQueue();
     });
@@ -224,18 +246,18 @@ class JustAudioPlayerAdapter implements AudioPlayerPort {
 
   @override
   Future<void> playNext(List<Song> songs) {
-    if (_sources.isEmpty || _currentPosition == null) return setQueue(songs);
     return _serialized(() async {
+      // Igual que en [addToQueue]: se decide con el estado ya actualizado.
+      if (_sources.isEmpty || _currentPosition == null) {
+        return _replaceQueue(songs, 0);
+      }
       final position = _currentPosition;
       final source = _player.currentIndex;
       if (songs.isEmpty || position == null || source == null) return;
       // Justo después de la actual en ambos órdenes: en la cola real (vía el
       // orden aleatorio) y en las fuentes (por si luego se desactiva).
       _shuffleOrder.placeNextInsertAt(position + 1);
-      await _player.insertAudioSources(
-        source + 1,
-        [for (final song in songs) _toSource(song)],
-      );
+      await _player.insertAudioSources(source + 1, await _toSources(songs));
       _sources = List.unmodifiable(
         List.of(_sources)..insertAll(source + 1, songs),
       );
@@ -279,8 +301,30 @@ class JustAudioPlayerAdapter implements AudioPlayerPort {
     return result;
   }
 
-  static AudioSource _toSource(Song song) =>
-      AudioSource.uri(Uri.parse(song.contentUri), tag: song);
+  /// Esquema que nadie sabe reproducir: la fuente falla al cargar y el error
+  /// sigue el camino de cualquier canción rota.
+  static final Uri _unplayableUri = Uri(scheme: 'taki-unplayable');
+
+  Future<List<AudioSource>> _toSources(List<Song> songs) =>
+      Future.wait([for (final song in songs) _toSource(song)]);
+
+  Future<AudioSource> _toSource(Song song) async {
+    PlaybackResource resource;
+    try {
+      resource = await _resolver.resolve(song);
+    } on PlaybackResolutionException catch (error) {
+      resource = UnavailableResource(reason: error.toString());
+    }
+
+    return switch (resource) {
+      LocalUriResource(:final uri) ||
+      RemoteUriResource(:final uri) =>
+        AudioSource.uri(Uri.parse(uri), tag: song),
+      ProviderPlaybackResource() ||
+      UnavailableResource() =>
+        AudioSource.uri(_unplayableUri, tag: song),
+    };
+  }
 
   int? get _currentPosition {
     final source = _player.currentIndex;

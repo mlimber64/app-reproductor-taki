@@ -31,6 +31,21 @@ void main() {
     expect(songs.take(2).map((s) => s.id), [2, 4]);
   });
 
+  test('a igual título, el desempate por id no depende del orden de entrada',
+      () async {
+    when(repository.getSongs).thenAnswer(
+      (_) async => [
+        buildSong(id: 9, title: 'Igual'),
+        buildSong(id: 3, title: 'igual'),
+        buildSong(id: 5, title: 'IGUAL'),
+      ],
+    );
+
+    final songs = await getSongs();
+
+    expect(songs.map((s) => s.id), [3, 5, 9]);
+  });
+
   test('descarta audios de menos de 30 segundos', () async {
     final minMs = LibraryConstants.minSongDuration.inMilliseconds;
     when(repository.getSongs).thenAnswer(

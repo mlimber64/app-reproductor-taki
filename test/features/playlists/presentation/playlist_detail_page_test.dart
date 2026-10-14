@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:taki/core/domain/entities/local_song.dart';
+import '../../../helpers/artwork_reference_ext.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:taki/app/theme/app_theme.dart';
 import 'package:taki/app/widgets/song_actions_sheet.dart';
+import 'package:taki/core/artwork/album_artwork_builder.dart';
 import 'package:taki/core/artwork/artwork_providers.dart';
 import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/core/domain/ports/artwork_repository.dart';
@@ -24,10 +27,13 @@ import 'package:taki/features/player/domain/entities/playback_state.dart';
 import 'package:taki/features/player/presentation/providers/player_providers.dart';
 import 'package:taki/features/playlists/presentation/pages/playlist_detail_page.dart';
 import 'package:taki/features/playlists/presentation/providers/playlists_providers.dart';
+import 'package:taki/core/domain/entities/local_music_identity.dart';
+
 
 import '../../../helpers/library_fakes.dart';
 import '../../../helpers/player_fakes.dart';
 import '../../../helpers/playlists_fakes.dart';
+import '../../../helpers/artwork_image.dart';
 
 void main() {
   late _GatedPlaylistsRepository playlists;
@@ -136,7 +142,7 @@ void main() {
       );
 
   List<int> storedSongIds(int id) =>
-      [for (final e in playlists.entriesOf(id)) e.songId];
+      [for (final e in playlists.entriesOf(id)) int.parse(e.musicIdentity.externalId)];
 
   testWidgets('encabezado y canciones en orden; oculta las ausentes',
       (tester) async {
@@ -332,7 +338,7 @@ void main() {
 
     List<int?> coverBytes(WidgetTester tester) => [
           for (final image in coverOf(tester).mosaic!)
-            (image as MemoryImage?)?.bytes.first,
+            firstByteOf(image),
         ];
 
     Finder loadingSpinner() => find.byWidgetPredicate(
@@ -378,8 +384,9 @@ void main() {
           ],
         );
 
-        // Menos de 4: TakiArtwork.mosaic muestra la primera (22).
-        expect(coverBytes(tester), [22, 11]);
+        // Menos de 4: TakiArtwork.mosaic muestra solo la primera (22), así que
+        // solo esa se resuelve.
+        expect(coverBytes(tester), [22]);
       });
 
       testWidgets('portada vacía: mosaico sin imágenes', (tester) async {
@@ -524,7 +531,7 @@ void main() {
         await openDetail(tester, id);
 
         final entries = playlists.entriesOf(id);
-        expect(entries.map((e) => e.songId), [1, 2, 1]);
+        expect(entries.map((e) => e.musicIdentity), [1, 2, 1].map(localMusicIdentity));
         for (final entry in entries) {
           expect(find.byKey(ValueKey(entry.id)), findsOneWidget);
         }
@@ -571,6 +578,24 @@ void main() {
         expect(find.text('Reproducir a continuación'), findsOneWidget);
         expect(find.text('Añadir a la cola'), findsOneWidget);
         verifyNever(() => playSongs(any(), any()));
+      });
+
+      testWidgets('la actual se identifica por identidad, no por Song.id',
+          (tester) async {
+        // Ambas tienen id 0: solo la identidad las distingue.
+        final uno = buildSong(id: 31, title: 'Foráneo 1');
+        final dos = buildSong(id: 32, title: 'Foráneo 2');
+        when(library.getSongs).thenAnswer((_) async => [uno, dos]);
+        final id = playlists.seed('Mix', songs: [uno, dos]);
+        await openDetail(tester, id);
+
+        player.emitState(
+          PlaybackState(queue: [uno, dos], currentIndex: 1, isPlaying: true),
+        );
+        await pumpFrames(tester);
+
+        expect(tileOf(tester, 'Foráneo 2').playback, TakiNowPlaying.playing);
+        expect(tileOf(tester, 'Foráneo 1').playback, TakiNowPlaying.none);
       });
 
       testWidgets('canción actual sonando: barras animadas y título en '
@@ -674,7 +699,8 @@ void main() {
       });
 
       testWidgets('las carátulas de las filas: bytes → MemoryImage a 48; no '
-          'se vuelven a pedir al cambiar de canción ni al reordenar',
+          'se vuelven a pedir al cambiar de canción; al reordenar solo se '
+          'pide la portada del álbum que pasa a ser el primero',
           (tester) async {
         final artwork = _BytesArtworkRepository();
         when(library.getSongs).thenAnswer((_) async => withArt);
@@ -692,7 +718,7 @@ void main() {
               ),
             );
         expect(rowArt('s11').size, TakiSongTile.artworkSize);
-        expect((rowArt('s11').image! as MemoryImage).bytes.first, 11);
+        expect(memoryImageOf(rowArt('s11').image!).bytes.first, 11);
         expect(rowArt('sin álbum').image, isNull);
         final before = artwork.requests.length;
 
@@ -710,7 +736,274 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(visibleTitles(tester), ['s22', 's11', 'sin álbum']);
-        expect(artwork.requests.length, before);
+        // La portada con menos de 4 álbumes muestra la primera: al pasar s22 a
+        // primera se pide su carátula a 128 (una sola petición nueva). Las
+        // filas (48) no se repiten.
+        expect(artwork.requests.length, before + 1);
+        expect(
+          artwork.requests.last,
+          (22, (128 * tester.view.devicePixelRatio).round()),
+        );
+        expect(coverBytes(tester), [22]);
+      });
+    });
+
+    // La selección de álbumes es playlistCoverAlbumIds (con sus propios tests);
+    // aquí se comprueba cómo la usa el detalle: las 4 primeras canciones
+    // *visibles* (no `coverSongIds`) y qué se pide a la caché.
+    group('portada: builders, fuente y tamaños (Fase 1.8G)', () {
+      final s11b = buildSong(id: 12, title: 's11b', albumId: 11);
+      // No están en la biblioteca: entradas guardadas ausentes.
+      final ghost1 = buildSong(id: 91, title: 'ausente 1', albumId: 91);
+      final ghost2 = buildSong(id: 92, title: 'ausente 2', albumId: 92);
+      final allSongs = [...withArt, s11b];
+
+      // Lado lógico de la portada y de cada tesela del 2×2, en píxeles.
+      int full(WidgetTester tester) =>
+          (128 * tester.view.devicePixelRatio).round();
+      int tile(WidgetTester tester) =>
+          (64 * tester.view.devicePixelRatio).round();
+
+      /// Peticiones de la portada (128 y 64 lógicos); las filas piden a 48.
+      List<(int, int)> coverRequests(
+        _BytesArtworkRepository artwork,
+        WidgetTester tester,
+      ) =>
+          [
+            for (final r in artwork.requests)
+              if (r.$2 == full(tester) || r.$2 == tile(tester)) r,
+          ];
+
+      /// Builders de la portada: los de 128 (las filas usan 48).
+      List<AlbumArtworkBuilder> headerBuilders(WidgetTester tester) => [
+            for (final b in tester
+                .widgetList<AlbumArtworkBuilder>(
+                    find.byType(AlbumArtworkBuilder)))
+              if (b.size == 128) b,
+          ];
+
+      Future<_BytesArtworkRepository> open(
+        WidgetTester tester,
+        List<Song> songs, {
+        void Function(_BytesArtworkRepository)? configure,
+      }) async {
+        final artwork = _BytesArtworkRepository();
+        configure?.call(artwork);
+        when(library.getSongs).thenAnswer((_) async => allSongs);
+        final id = playlists.seed('Mix', songs: songs);
+        await openDetail(
+          tester,
+          id,
+          overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+        );
+        return artwork;
+      }
+
+      testWidgets('cada fila usa AlbumArtworkBuilder con su albumId y el '
+          'tamaño de TakiSongTile (48, el que usaba el detalle)',
+          (tester) async {
+        final artwork = await open(tester, [s11, s22, noAlbum]);
+
+        final rows = [
+          for (final b in tester.widgetList<AlbumArtworkBuilder>(
+              find.byType(AlbumArtworkBuilder)))
+            if (b.size != 128) b,
+        ];
+        expect(rows.map((b) => b.albumId), [11, 22, null]);
+        for (final b in rows) {
+          expect(b.size, 48);
+          expect(b.size, TakiSongTile.artworkSize);
+        }
+        final physical = (48 * tester.view.devicePixelRatio).round();
+        final rowRequests = [
+          for (final r in artwork.requests)
+            if (r.$2 == physical) r,
+        ];
+        expect(rowRequests, [(11, physical), (22, physical)]);
+      });
+
+      testWidgets('la fila y la portada usan song.artwork, no albumId',
+          (tester) async {
+        final remote = remoteArtworkSong();
+        when(library.getSongs).thenAnswer((_) async => [remote]);
+        final id = playlists.seed('Mix', songs: [remote]);
+        final artwork = _BytesArtworkRepository();
+        await openDetail(
+          tester,
+          id,
+          overrides: [artworkRepositoryProvider.overrideWithValue(artwork)],
+        );
+
+        final builders = tester
+            .widgetList<AlbumArtworkBuilder>(find.byType(AlbumArtworkBuilder))
+            .toList();
+        expect(builders, hasLength(2)); // portada del encabezado + fila
+        expect(
+          builders.map((b) => b.reference),
+          everyElement(remoteTestArtwork),
+        );
+        // El albumId 77 nunca se pide a MediaStore.
+        expect(artwork.requests, isEmpty);
+      });
+
+      testWidgets('0 canciones: placeholder con borde y ninguna petición',
+          (tester) async {
+        final artwork = await open(tester, const []);
+
+        expect(coverOf(tester).mosaic, isEmpty);
+        expect(find.byType(AlbumArtworkBuilder), findsNothing);
+        expect(find.byType(AlbumArtworkMosaicBuilder), findsNothing);
+        expect(artwork.requests, isEmpty);
+      });
+
+      testWidgets('1 álbum: imagen individual a 128', (tester) async {
+        final artwork = await open(tester, [s11, s11b]);
+
+        final header = headerBuilders(tester);
+        expect(header, hasLength(1));
+        expect(header.single.albumId, 11);
+        expect(header.single.size, 128);
+        expect(find.byType(AlbumArtworkMosaicBuilder), findsNothing);
+        expect(coverBytes(tester), [11]);
+        expect(coverRequests(artwork, tester), [(11, full(tester))]);
+      });
+
+      for (final (name, songs, first) in [
+        ('2 álbumes', [s22, s11], 22),
+        ('3 álbumes', [s33, s11, s22], 33),
+      ]) {
+        testWidgets('$name: solo la primera imagen, a tamaño completo',
+            (tester) async {
+          final artwork = await open(tester, songs);
+
+          expect(headerBuilders(tester).single.albumId, first);
+          expect(find.byType(AlbumArtworkMosaicBuilder), findsNothing);
+          expect(coverBytes(tester), [first]);
+          expect(coverRequests(artwork, tester), [(first, full(tester))]);
+        });
+      }
+
+      testWidgets('4 álbumes: mosaico con cada tesela a la mitad del lado',
+          (tester) async {
+        final artwork = await open(tester, [s11, s22, s33, s44]);
+
+        final mosaic = tester.widget<AlbumArtworkMosaicBuilder>(
+          find.byType(AlbumArtworkMosaicBuilder),
+        );
+        expect(mosaic.albumIds, [11, 22, 33, 44]);
+        expect(mosaic.size, 128);
+        expect(headerBuilders(tester), isEmpty);
+        expect(coverBytes(tester), [11, 22, 33, 44]);
+        final requests = coverRequests(artwork, tester);
+        expect(requests.map((r) => r.$2).toSet(), {tile(tester)});
+        expect(requests.map((r) => r.$1).toSet(), {11, 22, 33, 44});
+        expect(tile(tester), lessThan(full(tester)));
+      });
+
+      testWidgets('[A, A, B, C, D] da [A, B, C]: un álbum visible y el 4.º '
+          'no se pide', (tester) async {
+        final artwork = await open(tester, [s11, s11b, s22, s33, s44]);
+
+        // Primeras 4 canciones: 11, 11, 22, 33 → [11, 22, 33] (<4).
+        expect(coverBytes(tester), [11]);
+        expect(coverRequests(artwork, tester), [(11, full(tester))]);
+        expect(find.byType(AlbumArtworkMosaicBuilder), findsNothing);
+      });
+
+      testWidgets('solo cuentan las 4 primeras canciones visibles: la 5.ª no '
+          'completa el mosaico', (tester) async {
+        final artwork = await open(tester, [s11, s22, s33, noAlbum, s44]);
+
+        // items.take(4) = 11, 22, 33, sin álbum → [11, 22, 33] → primera.
+        expect(coverBytes(tester), [11]);
+        expect(coverRequests(artwork, tester), [(11, full(tester))]);
+        expect(find.byType(AlbumArtworkMosaicBuilder), findsNothing);
+      });
+
+      testWidgets('las ausentes de la biblioteca no cuentan: se usan las 4 '
+          'primeras visibles (a diferencia de la lista)', (tester) async {
+        await open(tester, [ghost1, s11, ghost2, s22, s33, s44]);
+
+        // Visibles: 11, 22, 33, 44 → mosaico completo. La lista, con
+        // coverSongIds (entradas guardadas), vería [null, 11, null, 22].
+        expect(find.byType(AlbumArtworkMosaicBuilder), findsOneWidget);
+        expect(coverBytes(tester), [11, 22, 33, 44]);
+      });
+
+      testWidgets('todas ausentes: no hay canciones visibles, portada vacía',
+          (tester) async {
+        final artwork = await open(tester, [ghost1, ghost2]);
+
+        expect(find.text('Sin canciones'), findsOneWidget);
+        expect(coverOf(tester).mosaic, isEmpty);
+        expect(find.byType(AlbumArtworkBuilder), findsNothing);
+        expect(artwork.requests, isEmpty);
+      });
+
+      testWidgets('canciones sin álbum: una pieza sin imagen y ninguna '
+          'petición de portada', (tester) async {
+        final artwork = await open(tester, [noAlbum]);
+
+        expect(coverOf(tester).mosaic, [null]);
+        final header = headerBuilders(tester);
+        expect(header, hasLength(1));
+        expect(header.single.albumId, isNull);
+        expect(coverRequests(artwork, tester), isEmpty);
+      });
+
+      testWidgets('artwork ausente de un álbum: pieza sin imagen y la '
+          'pantalla sigue', (tester) async {
+        await open(tester, [s11], configure: (r) => r.missing.add(11));
+
+        expect(coverOf(tester).mosaic, [null]);
+        expect(find.text('s11'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('error de lectura en un mosaico: una pieza sin imagen y '
+          'las filas siguen funcionando', (tester) async {
+        await open(
+          tester,
+          [s11, s22, s33, s44],
+          configure: (r) => r.failing.add(22),
+        );
+
+        expect(coverBytes(tester), [11, null, 33, 44]);
+        expect(tester.takeException(), isNull);
+
+        await tester.tap(find.text('s33'));
+        await tester.pumpAndSettle();
+        verify(() => playSongs([s11, s22, s33, s44], 2)).called(1);
+      });
+
+      testWidgets('quitar la primera canción actualiza la portada y Deshacer '
+          'la restaura', (tester) async {
+        await open(tester, [s11, s22]);
+        expect(coverBytes(tester), [11]);
+
+        await tester.tap(moreButtonOf('s11'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Quitar de la playlist'));
+        await tester.pumpAndSettle();
+        expect(coverBytes(tester), [22]);
+
+        await tester.tap(find.text('Deshacer'));
+        await tester.pumpAndSettle();
+        expect(coverBytes(tester), [11]);
+      });
+
+      testWidgets('reordenar la primera canción cambia la portada',
+          (tester) async {
+        await open(tester, [s11, s22, s33]);
+        expect(coverBytes(tester), [11]);
+
+        tester
+            .widget<ReorderableListView>(find.byType(ReorderableListView))
+            .onReorder(0, 2);
+        await tester.pumpAndSettle();
+
+        expect(visibleTitles(tester), ['s22', 's11', 's33']);
+        expect(coverBytes(tester), [22]);
       });
     });
 
@@ -951,7 +1244,7 @@ void main() {
       });
 
       testWidgets('carga: spinner hasta tener las canciones', (tester) async {
-        final pending = Completer<List<Song>>();
+        final pending = Completer<List<LocalSong>>();
         when(library.getSongs).thenAnswer((_) => pending.future);
         final id = playlists.seed('Mi mix', songs: [a]);
         await openDetail(tester, id, settle: false);
@@ -1093,9 +1386,15 @@ class _GatedPlaylistsRepository extends FakePlaylistsRepository {
 class _BytesArtworkRepository implements ArtworkRepository {
   final requests = <(int, int)>[];
 
+  /// Álbumes sin carátula y álbumes cuya lectura falla.
+  final missing = <int>{};
+  final failing = <int>{};
+
   @override
   Future<Uint8List?> getAlbumArtwork(int albumId, {required int size}) async {
     requests.add((albumId, size));
+    if (failing.contains(albumId)) throw StateError('lectura fallida');
+    if (missing.contains(albumId)) return null;
     return Uint8List.fromList([albumId, size]);
   }
 }

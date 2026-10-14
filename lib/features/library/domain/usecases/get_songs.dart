@@ -1,4 +1,4 @@
-import '../../../../core/domain/entities/song.dart';
+import '../../../../core/domain/entities/local_song.dart';
 import '../ports/song_repository.dart';
 import '../services/song_filter.dart';
 
@@ -12,7 +12,7 @@ class GetSongs {
   final SongRepository _repository;
   final SongFilter _filter;
 
-  Future<List<Song>> call() async {
+  Future<List<LocalSong>> call() async {
     final songs = await _repository.getSongs();
 
     return _filter.apply(songs)

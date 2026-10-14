@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taki/core/domain/entities/local_song.dart';
+import 'package:taki/core/domain/entities/artwork_reference.dart';
 import 'package:taki/core/constants/library_constants.dart';
-import 'package:taki/core/domain/entities/song.dart';
 import 'package:taki/features/library/domain/services/song_filter.dart';
 
 import '../../../helpers/library_fakes.dart';
@@ -54,16 +55,16 @@ void main() {
   });
 
   test('sin carpeta de la fuente, usa la de la ruta del archivo', () {
-    Song withPath(String path) => Song(
+    LocalSong withPath(String path) => LocalSong(
           id: 1,
           title: 'T',
           artist: null,
           album: null,
           albumId: null,
+          artwork: localArtworkReference(null),
           durationMs: 180000,
           path: path,
           contentUri: 'content://x/1',
-          dateAdded: null,
         );
 
     expect(
