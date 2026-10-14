@@ -1,13 +1,16 @@
 import '../entities/catalog_provider_info.dart';
+import '../ports/catalog_browse.dart';
 import '../ports/catalog_search.dart';
 import '../ports/catalog_sources.dart';
 
-/// Una fuente de catálogo registrada: su descripción y su búsqueda.
+/// Una fuente de catálogo registrada: su descripción, su búsqueda y, si la
+/// tiene, su descubrimiento ([browse]).
 final class CatalogSourceRegistration {
-  const CatalogSourceRegistration(this.info, this.search);
+  const CatalogSourceRegistration(this.info, this.search, {this.browse});
 
   final CatalogProviderInfo info;
   final CatalogSearch search;
+  final CatalogBrowse? browse;
 }
 
 /// [CatalogSources] sobre un conjunto fijo de registros, indexados por
@@ -49,5 +52,12 @@ class SourceCatalogSources implements CatalogSources {
     final registration = _bySource[source];
     if (registration == null) throw UnknownCatalogSource(source);
     return registration.search;
+  }
+
+  @override
+  CatalogBrowse? browseIn(String source) {
+    final registration = _bySource[source];
+    if (registration == null) throw UnknownCatalogSource(source);
+    return registration.browse;
   }
 }

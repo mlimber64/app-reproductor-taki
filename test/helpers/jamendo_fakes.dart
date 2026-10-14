@@ -69,6 +69,8 @@ class FakeJamendoApi implements JamendoApi {
   List<JamendoTrack> tracks;
   Object? error;
   int searchCalls = 0;
+  int listCalls = 0;
+  final List<Map<String, Object?>> listArgs = [];
   final List<List<String>> idCalls = [];
   final List<Map<String, Object?>> searchArgs = [];
   bool hasMore = false;
@@ -89,6 +91,19 @@ class FakeJamendoApi implements JamendoApi {
       'limit': limit,
       'offset': offset,
     });
+    if (error != null) throw error!;
+    return JamendoTrackPage(tracks, hasMore: hasMore);
+  }
+
+  @override
+  Future<JamendoTrackPage> listTracks({
+    required JamendoTrackOrder order,
+    String? tag,
+    required int limit,
+    required int offset,
+  }) async {
+    listCalls++;
+    listArgs.add({'order': order, 'tag': tag, 'limit': limit, 'offset': offset});
     if (error != null) throw error!;
     return JamendoTrackPage(tracks, hasMore: hasMore);
   }

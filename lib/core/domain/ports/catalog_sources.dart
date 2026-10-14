@@ -1,4 +1,5 @@
 import '../entities/catalog_provider_info.dart';
+import 'catalog_browse.dart';
 import 'catalog_search.dart';
 
 /// Registro de las fuentes de catálogo disponibles.
@@ -17,4 +18,8 @@ abstract interface class CatalogSources {
   bool get isAvailable;
 
   CatalogSearch searchIn(String source);
+
+  /// Discovery for `source`, or `null` when that source cannot be browsed.
+  /// Throws `UnknownCatalogSource` if `source` is not registered.
+  CatalogBrowse? browseIn(String source);
 }

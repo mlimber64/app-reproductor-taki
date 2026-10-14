@@ -55,6 +55,15 @@ class _SlowApi implements JamendoApi {
     required int offset,
   }) =>
       throw UnimplementedError();
+
+  @override
+  Future<JamendoTrackPage> listTracks({
+    required JamendoTrackOrder order,
+    String? tag,
+    required int limit,
+    required int offset,
+  }) =>
+      throw UnimplementedError();
 }
 
 /// Fase 3.11A: una misma `MusicIdentity` con la resolución pendiente se resuelve

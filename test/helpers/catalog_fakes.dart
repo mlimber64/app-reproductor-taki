@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taki/core/catalog/catalog_sources_providers.dart';
 import 'package:taki/core/domain/entities/catalog_provider_info.dart';
 import 'package:taki/core/domain/entities/catalog_search.dart';
+import 'package:taki/core/domain/entities/catalog_section.dart';
 import 'package:taki/core/domain/entities/music_identity.dart';
 import 'package:taki/core/domain/entities/provider_attribution.dart';
 import 'package:taki/core/domain/entities/song.dart';
+import 'package:taki/core/domain/ports/catalog_browse.dart';
 import 'package:taki/core/domain/ports/catalog_search.dart';
 import 'package:taki/core/domain/services/source_catalog_sources.dart';
 import 'package:taki/features/search/domain/entities/catalog_search_policy.dart';
@@ -69,6 +71,27 @@ class FakeCatalogSearch implements CatalogSearch {
 }
 
 /// Reloj manual: nada se ejecuta hasta que el test llama a [advance].
+/// `CatalogBrowse` scripted like [FakeCatalogSearch]: records every call and
+/// answers with [handler] (which may return a pending `Future`).
+class FakeCatalogBrowse implements CatalogBrowse {
+  FakeCatalogBrowse(
+      [Future<CatalogSearchPage> Function(CatalogSection section, int limit)? h])
+      : handler = h ?? ((section, limit) async => fakePage(limit));
+
+  Future<CatalogSearchPage> Function(CatalogSection section, int limit) handler;
+
+  /// Every section asked for, in order.
+  final List<CatalogSection> calls = [];
+  final List<int> limits = [];
+
+  @override
+  Future<CatalogSearchPage> section(CatalogSection section, {int limit = 20}) {
+    calls.add(section);
+    limits.add(limit);
+    return handler(section, limit);
+  }
+}
+
 class ManualSearchScheduler implements SearchScheduler {
   Duration _now = Duration.zero;
   final List<_Task> _tasks = [];
@@ -107,6 +130,7 @@ class _Task {
 /// hay ninguna fuente registrada.
 ProviderContainer catalogContainer({
   CatalogSearch? search,
+  CatalogBrowse? browse,
   ManualSearchScheduler? scheduler,
   CatalogSearchPolicy? policy,
   List<CatalogSourceRegistration>? registrations,
@@ -120,6 +144,7 @@ ProviderContainer catalogContainer({
               CatalogSourceRegistration(
                 CatalogProviderInfo(source: fakeCatalogSource, label: 'Fake'),
                 search,
+                browse: browse,
               ),
           ],
     )),

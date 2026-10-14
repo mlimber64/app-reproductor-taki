@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/catalog/catalog_sources_providers.dart';
 import '../../../../core/domain/entities/catalog_search.dart';
+import '../../../../core/domain/entities/catalog_section.dart';
 import '../../domain/entities/catalog_result_item.dart';
 import '../../domain/entities/catalog_search_policy.dart';
 import '../../domain/entities/catalog_search_state.dart';
 import '../../domain/ports/search_scheduler.dart';
+import '../../domain/usecases/get_featured_songs.dart';
 import '../../domain/usecases/search_catalog.dart';
 import '../../infrastructure/timer_search_scheduler.dart';
 
@@ -29,6 +31,30 @@ final searchCatalogProvider = Provider<SearchCatalog?>((ref) {
     pageSize: policy.pageSize,
   );
 });
+
+/// Featured songs of the first registered source that can be browsed, or
+/// `null` when none can (the screen then keeps its plain idle view).
+final featuredCatalogProvider = Provider<GetFeaturedSongs?>((ref) {
+  final sources = ref.watch(catalogSourcesProvider);
+  for (final info in sources.available) {
+    final browse = sources.browseIn(info.source);
+    if (browse != null) return GetFeaturedSongs(browse);
+  }
+  return null;
+});
+
+/// The songs of one discovery section, loaded the first time a carousel asks
+/// for them and kept for the session. Each section is independent: one that
+/// fails does not affect the others, and `ref.invalidate` refreshes one.
+/// Failures surface as [CatalogSearchFailure] in the `AsyncValue`.
+final featuredSectionSongsProvider =
+    FutureProvider.family<List<CatalogResultItem>, CatalogSection>(
+  (ref, section) {
+    final featured = ref.watch(featuredCatalogProvider);
+    if (featured == null) return const <CatalogResultItem>[];
+    return featured(section);
+  },
+);
 
 final catalogSearchProvider =
     NotifierProvider<CatalogSearchNotifier, CatalogSearchState>(

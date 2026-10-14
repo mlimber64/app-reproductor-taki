@@ -31,6 +31,23 @@ class CachingJamendoApi implements JamendoApi {
   }
 
   @override
+  Future<JamendoTrackPage> listTracks({
+    required JamendoTrackOrder order,
+    String? tag,
+    required int limit,
+    required int offset,
+  }) async {
+    final page = await _inner.listTracks(
+      order: order,
+      tag: tag,
+      limit: limit,
+      offset: offset,
+    );
+    _remember(page.tracks);
+    return page;
+  }
+
+  @override
   Future<List<JamendoTrack>> tracksByIds(Iterable<String> ids) async {
     final tracks = await _inner.tracksByIds(ids);
     _remember(tracks);

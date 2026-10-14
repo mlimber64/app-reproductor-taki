@@ -711,16 +711,24 @@ void main() {
     bool focused(WidgetTester tester) =>
         tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus;
 
-    testWidgets('al entrar, el campo recibe el foco tras el primer frame',
+    testWidgets('al entrar, el campo no pide el foco: el teclado no tapa nada',
         (tester) async {
       await pumpPage(tester);
+      await tester.pump();
+      expect(focused(tester), isFalse);
+    });
+
+    testWidgets('tocar el campo le da el foco', (tester) async {
+      await pumpPage(tester);
+
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+
       expect(focused(tester), isTrue);
     });
 
     testWidgets('un rebuild no vuelve a pedir el foco', (tester) async {
       await pumpPage(tester);
-      FocusManager.instance.primaryFocus?.unfocus();
-      await tester.pump();
       expect(focused(tester), isFalse);
 
       // Cambia el estado (reconstruye la página) sin que el usuario enfoque.
@@ -744,13 +752,15 @@ void main() {
     testWidgets('salir de la pantalla libera foco y controller sin errores',
         (tester) async {
       await pumpPage(tester);
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
       expect(focused(tester), isTrue);
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       expect(tester.takeException(), isNull);
       expect(find.byType(EditableText), findsNothing);
     });
 
-    testWidgets('la pestaña inactiva suelta el foco y al volver lo recupera',
+    testWidgets('la pestaña inactiva suelta el foco y al volver no lo pide',
         (tester) async {
       final active = ValueNotifier(true);
       addTearDown(active.dispose);
@@ -761,6 +771,8 @@ void main() {
           builder: (_, on, _) => TickerMode(enabled: on, child: page),
         ),
       );
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
       expect(focused(tester), isTrue);
 
       active.value = false;
@@ -770,7 +782,7 @@ void main() {
       active.value = true;
       await tester.pump();
       await tester.pump();
-      expect(focused(tester), isTrue);
+      expect(focused(tester), isFalse, reason: 'the keyboard stays closed');
     });
 
     testWidgets('entrar con la pestaña inactiva no pide el foco',

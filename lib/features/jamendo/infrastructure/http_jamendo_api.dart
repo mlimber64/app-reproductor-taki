@@ -63,6 +63,26 @@ class HttpJamendoApi implements JamendoApi {
   }
 
   @override
+  Future<JamendoTrackPage> listTracks({
+    required JamendoTrackOrder order,
+    String? tag,
+    required int limit,
+    required int offset,
+  }) async {
+    final parsed = await _tracks({
+      'limit': '$limit',
+      'offset': '$offset',
+      'order': switch (order) {
+        JamendoTrackOrder.popularityWeek => 'popularity_week',
+        JamendoTrackOrder.popularityMonth => 'popularity_month',
+        JamendoTrackOrder.releaseDateDesc => 'releasedate_desc',
+      },
+      if (_has(tag)) 'tags': tag!,
+    });
+    return JamendoTrackPage(parsed.tracks, hasMore: parsed.rawCount >= limit);
+  }
+
+  @override
   Future<List<JamendoTrack>> tracksByIds(Iterable<String> ids) async {
     final unique = ids.toSet().toList();
     if (unique.isEmpty) return const [];

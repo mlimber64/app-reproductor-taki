@@ -18,6 +18,7 @@ import '../../../player/presentation/providers/player_providers.dart';
 import '../../domain/entities/catalog_search_state.dart';
 import '../providers/catalog_search_providers.dart';
 import '../search_texts.dart';
+import '../widgets/featured_view.dart';
 
 /// Búsqueda en el catálogo (docs/PHASE_3_2C_SEARCH_UI.md).
 ///
@@ -51,12 +52,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     super.didChangeDependencies();
     // La pestaña vive en un `IndexedStack`: «activa» = sus tickers corren.
     final active = TickerMode.valuesOf(context).enabled;
-    if (active && !_wasActive) {
-      // Al entrar (primera vez o al volver a la pestaña), tras el primer frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && TickerMode.valuesOf(context).enabled) _focus.requestFocus();
-      });
-    } else if (!active && _wasActive) {
+    // Al entrar NO se pide el foco: el teclado taparía los carruseles, que son
+    // lo primero que se ve. Se abre cuando el usuario toca el campo.
+    if (!active && _wasActive) {
       // Al salir, el teclado no se queda abierto sobre otra pestaña.
       _focus.unfocus();
     }
@@ -115,7 +113,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   Widget _body(CatalogSearchState state, CatalogSearchNotifier notifier) {
     return switch (state) {
-      SearchIdle() => const _IdleView(),
+      SearchIdle() => _FeaturedSection(onPlayAt: _playFrom, onActions: _actions),
       // Escribiendo: se conservan los resultados anteriores; un vacío o un
       // error anteriores no se muestran (no son de esta consulta).
       SearchTyping(:final previous) => previous is SearchResults
@@ -124,7 +122,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               onPlay: _play,
               onActions: _actions,
             )
-          : const _IdleView(),
+          : _FeaturedSection(onPlayAt: _playFrom, onActions: _actions),
       SearchLoading() => switch (_lastResults) {
           final last? => _ResultsList(
               results: last,
@@ -165,6 +163,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     await widget.onSongActions(context, ref, song);
   }
 
+  /// Tap on a featured card: plays the whole featured list starting there, so
+  /// the queue follows the grid like in a playlist.
+  Future<void> _playFrom(List<Song> songs, int index) async {
+    FocusScope.of(context).unfocus();
+    await ref.read(playSongsProvider).call(songs, index);
+    unawaited(ref.read(notificationPermissionProvider).requestIfNeeded());
+  }
+
   /// Tap en un resultado: cierra el teclado y reproduce con el caso de uso de
   /// siempre. Cómo queda la cola (D7) sigue sin decidirse: hoy `PlaySongs`
   /// reemplaza la cola, y aquí solo se le pasa la canción tocada.
@@ -173,6 +179,35 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     await ref.read(playSongsProvider).call([song], 0);
     // Después de arrancar: si se rechaza, la música sigue sonando.
     unawaited(ref.read(notificationPermissionProvider).requestIfNeeded());
+  }
+}
+
+/// The featured grid with the playback state it needs to mark the playing
+/// card. It lives here, next to the page's own Player import, so the grid
+/// widget itself stays free of other features.
+class _FeaturedSection extends ConsumerWidget {
+  const _FeaturedSection({required this.onPlayAt, required this.onActions});
+
+  final Future<void> Function(List<Song> songs, int index) onPlayAt;
+  final Future<void> Function(Song song) onActions;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIdentity = ref.watch(
+      currentSongProvider.select((song) => song.valueOrNull?.musicIdentity),
+    );
+    final isPlaying = ref.watch(
+          playbackStateProvider.select((state) => state.valueOrNull?.isPlaying),
+        ) ??
+        false;
+
+    return FeaturedView(
+      fallback: const _IdleView(),
+      currentIdentity: currentIdentity,
+      isPlaying: isPlaying,
+      onPlayAt: onPlayAt,
+      onActions: onActions,
+    );
   }
 }
 

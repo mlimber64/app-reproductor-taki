@@ -106,29 +106,29 @@ void main() {
       expect(AppRoutes.search, '/search');
     });
 
-    testWidgets('Buscar recibe el foco al entrar y lo suelta al salir',
-        (tester) async {
+    testWidgets(
+        'Buscar no abre el teclado al entrar; lo suelta al salir y no lo '
+        'vuelve a pedir', (tester) async {
       await pumpApp(tester, catalog: true);
       bool focused() => tester
-          .widget<EditableText>(find.byType(EditableText))
+          .widget<EditableText>(
+              find.byType(EditableText, skipOffstage: false))
           .focusNode
           .hasFocus;
 
       await goTo(tester, 'Buscar');
+      expect(focused(), isFalse, reason: 'the keyboard must not cover the page');
+
+      // The user taps the field: only then the keyboard opens.
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
       expect(focused(), isTrue);
 
       await goTo(tester, 'Playlists');
-      expect(
-        tester
-            .widget<EditableText>(
-                find.byType(EditableText, skipOffstage: false))
-            .focusNode
-            .hasFocus,
-        isFalse,
-      );
+      expect(focused(), isFalse);
 
       await goTo(tester, 'Buscar');
-      expect(focused(), isTrue);
+      expect(focused(), isFalse);
     });
 
     testWidgets('la búsqueda conserva su estado al cambiar de pestaña',

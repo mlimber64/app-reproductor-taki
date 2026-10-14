@@ -5,6 +5,7 @@ import '../core/domain/entities/local_music_identity.dart';
 import '../core/domain/ports/artwork_http_client.dart';
 import '../core/domain/ports/artwork_resolver.dart';
 import '../core/domain/ports/attribution_lookup.dart';
+import '../core/domain/ports/catalog_browse.dart';
 import '../core/domain/ports/catalog_search.dart';
 import '../core/domain/ports/catalog_sources.dart';
 import '../core/domain/ports/playback_resolver.dart';
@@ -19,6 +20,7 @@ import '../features/jamendo/domain/ports/jamendo_api.dart';
 import '../features/jamendo/domain/services/caching_jamendo_api.dart';
 import '../features/jamendo/domain/services/jamendo_attribution_lookup.dart';
 import '../features/jamendo/domain/services/jamendo_audio_cache.dart';
+import '../features/jamendo/domain/services/jamendo_catalog_browse.dart';
 import '../features/jamendo/domain/services/jamendo_catalog_search.dart';
 import '../features/jamendo/domain/services/jamendo_playback_resolver.dart';
 import '../features/jamendo/domain/services/jamendo_song_lookup.dart';
@@ -31,12 +33,14 @@ class JamendoServices {
     required this.lookup,
     required this.playback,
     required this.search,
+    required this.browse,
     required this.attribution,
   });
 
   final SongLookup lookup;
   final PlaybackResolver playback;
   final CatalogSearch search;
+  final CatalogBrowse browse;
   final AttributionLookup attribution;
 }
 
@@ -52,6 +56,7 @@ JamendoServices buildJamendoServicesFor(
     lookup: JamendoSongLookup(cached),
     playback: JamendoPlaybackResolver(cached, audioCache),
     search: JamendoCatalogSearch(cached),
+    browse: JamendoCatalogBrowse(cached),
     attribution: JamendoAttributionLookup(cached),
   );
 }
@@ -87,6 +92,7 @@ CatalogSources buildCatalogSources(JamendoServices? jamendo) =>
         CatalogSourceRegistration(
           CatalogProviderInfo(source: jamendoSource, label: jamendoProviderName),
           jamendo.search,
+          browse: jamendo.browse,
         ),
     ]);
 
